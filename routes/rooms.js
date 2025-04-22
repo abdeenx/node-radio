@@ -1,13 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { expressjwt: jwt } = require('express-jwt');
+const { expressjwt } = require('express-jwt');
 const jwksRsa = require('jwks-rsa');
 const Room = require('../models/Room');
 const User = require('../models/User');
 const Track = require('../models/Track');
 
 // Auth0 middleware for validating JWT
-const checkJwt = jwt({
+const checkJwt = expressjwt({
   secret: jwksRsa.expressJwtSecret({
     cache: true,
     rateLimit: true,
