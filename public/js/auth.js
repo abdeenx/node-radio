@@ -1,4 +1,5 @@
 // Auth0 Configuration - Use environment variables if available
+// When deployed to Vercel, these will be injected by the server
 const auth0Config = {
   domain: window.AUTH0_DOMAIN || 'dev-4ehbbvfyj6j25ymb.us.auth0.com', // Your Auth0 domain
   clientId: window.AUTH0_CLIENT_ID || 'gD07PIb4P7W1NlJqwCXcj9qjZh8XVHRx', // Your Auth0 client ID

@@ -86,35 +86,35 @@ The application will be available at `http://localhost:3000`
 
 ### Deploying to Vercel
 
-This application is configured for easy deployment to Vercel. Follow these steps to deploy:
+The application is configured for deployment on Vercel. Follow these steps to deploy:
 
-1. Create a [Vercel](https://vercel.com) account if you don't have one
-2. Install the Vercel CLI:
-   ```
-   npm install -g vercel
-   ```
-3. Login to Vercel:
-   ```
-   vercel login
-   ```
-4. Deploy the application:
-   ```
-   vercel
-   ```
-5. For production deployment:
-   ```
-   vercel --prod
-   ```
+1. **Push your code to GitHub**
 
-#### Environment Variables
-Add all required environment variables in the Vercel project settings:
-- MongoDB connection string
-- Auth0 credentials
-- Cloudinary credentials
+2. **Connect Vercel to your GitHub repository**
+   - Sign up or log in to [Vercel](https://vercel.com)
+   - Create a new project and import your GitHub repository
+   - Select "Node.js" as the framework preset
 
-#### Notes for Deployment
-- Make sure to update the Auth0 redirect URI in your Auth0 dashboard to include your Vercel deployment URL
-- Update the Cloudinary CORS settings if necessary
+3. **Configure Environment Variables**
+   - In your Vercel project settings, add the following environment variables:
+     - `MONGODB_URI`: Your MongoDB Atlas connection string
+     - `AUTH0_DOMAIN`: Your Auth0 domain
+     - `AUTH0_CLIENT_ID`: Your Auth0 client ID
+     - `AUTH0_AUDIENCE`: Your Auth0 audience 
+     - `CLOUDINARY_CLOUD_NAME`: Your Cloudinary cloud name
+     - `CLOUDINARY_API_KEY`: Your Cloudinary API key
+     - `CLOUDINARY_API_SECRET`: Your Cloudinary API secret
+
+4. **Deploy**
+   - Vercel will automatically deploy your application
+   - Every push to your main branch will trigger a new deployment
+
+### Update Auth0 Configuration
+
+After deploying, update your Auth0 application:
+1. Log in to the [Auth0 Dashboard](https://manage.auth0.com/)
+2. Navigate to your application
+3. Update the "Allowed Callback URLs", "Allowed Logout URLs", and "Allowed Web Origins" to include your Vercel deployment URL
 
 ## Database Options
 

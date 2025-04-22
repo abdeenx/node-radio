@@ -20,15 +20,30 @@
       "dest": "server.js"
     },
     {
-      "src": "/(.*)",
-      "dest": "public/$1"
+      "src": "/css/(.*)",
+      "dest": "/public/css/$1"
     },
     {
-      "src": "/",
-      "dest": "public/index.html"
+      "src": "/js/(.*)",
+      "dest": "/public/js/$1"
+    },
+    {
+      "src": "/images/(.*)",
+      "dest": "/public/images/$1"
+    },
+    {
+      "src": "/(.+\\..+)",
+      "dest": "/public/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "server.js"
     }
   ],
   "env": {
-    "NODE_ENV": "production"
+    "NODE_ENV": "production",
+    "AUTH0_DOMAIN": "dev-4ehbbvfyj6j25ymb.us.auth0.com",
+    "AUTH0_CLIENT_ID": "gD07PIb4P7W1NlJqwCXcj9qjZh8XVHRx",
+    "AUTH0_AUDIENCE": "https://api.noderadio.com"
   }
 } 

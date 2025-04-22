@@ -64,8 +64,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/tracks', tracksRoutes);
 app.use('/api/rooms', roomsRoutes);
 
-// Health check endpoint for Render
-app.get('/health', (req, res) => {
+// Health check endpoint for Vercel
+app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok', time: new Date().toISOString() });
 });
 
@@ -217,8 +217,7 @@ io.on('connection', (socket) => {
 
 // Start the server
 // Use PORT provided by environment or default to 3000
-// Render will provide a PORT environment variable
-// Ensure compatibility with Vercel serverless deployment
+// Vercel will provide a PORT environment variable in production
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
