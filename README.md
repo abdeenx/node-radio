@@ -82,47 +82,39 @@ npm start
 
 The application will be available at `http://localhost:3000`
 
-## Deployment to Render
+## Deployment
 
-This project includes a configuration file and a helpful script to guide you through deployment to Render.
+### Deploying to Vercel
 
-### Automated Deployment with render.yaml (Blueprint)
+This application is configured for easy deployment to Vercel. Follow these steps to deploy:
 
-1. Push your code with the `render.yaml` file to a Git repository (GitHub, GitLab, etc.)
-2. Create an account on [Render](https://render.com) if you don't have one
-3. In the Render dashboard, select "Blueprint" and connect to your repository
-4. Render will automatically detect the `render.yaml` file and create the service
-5. You'll need to configure environment variables in the Render dashboard
+1. Create a [Vercel](https://vercel.com) account if you don't have one
+2. Install the Vercel CLI:
+   ```
+   npm install -g vercel
+   ```
+3. Login to Vercel:
+   ```
+   vercel login
+   ```
+4. Deploy the application:
+   ```
+   vercel
+   ```
+5. For production deployment:
+   ```
+   vercel --prod
+   ```
 
-### Manual Deployment via Git
+#### Environment Variables
+Add all required environment variables in the Vercel project settings:
+- MongoDB connection string
+- Auth0 credentials
+- Cloudinary credentials
 
-1. Create an account on [Render](https://render.com) if you don't have one
-2. Create a new Web Service in the Render dashboard
-3. Connect your Git repository
-4. Configure the service with:
-   - Build Command: `npm install`
-   - Start Command: `node server.js`
-   - Environment Variables: Add all required variables from your `.env` file
-
-### Deployment Guide
-
-For a step-by-step guide, run the included helper script:
-
-```bash
-chmod +x render-deploy.sh
-./render-deploy.sh
-```
-
-This script will guide you through the deployment process, showing which environment variables you need to configure.
-
-### After Deployment
-
-Once deployed, your app will be available at the URL provided by Render (typically `https://your-app-name.onrender.com`).
-
-Remember to update your Auth0 configuration with your new Render URL:
-- Allowed Callback URLs: `https://your-app-name.onrender.com`
-- Allowed Logout URLs: `https://your-app-name.onrender.com`
-- Allowed Web Origins: `https://your-app-name.onrender.com`
+#### Notes for Deployment
+- Make sure to update the Auth0 redirect URI in your Auth0 dashboard to include your Vercel deployment URL
+- Update the Cloudinary CORS settings if necessary
 
 ## Database Options
 

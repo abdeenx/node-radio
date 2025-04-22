@@ -3,7 +3,7 @@ const auth0Config = {
   domain: 'your-auth0-domain.auth0.com',
   clientId: 'your-auth0-client-id',
   audience: 'https://api.noderadio.com',
-  redirectUri: window.location.origin, // Update this to your Render URL in production
+  redirectUri: window.location.origin, // Update this to your Vercel URL in production
   cacheLocation: 'localstorage'
 };
 

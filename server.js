@@ -180,6 +180,7 @@ io.on('connection', (socket) => {
 // Start the server
 // Use PORT provided by environment or default to 3000
 // Render will provide a PORT environment variable
+// Ensure compatibility with Vercel serverless deployment
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
