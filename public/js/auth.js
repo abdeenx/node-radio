@@ -1,11 +1,14 @@
-// Auth0 Configuration
+// Auth0 Configuration - Replace with your actual Auth0 app details
 const auth0Config = {
-  domain: 'your-auth0-domain.auth0.com',
-  clientId: 'your-auth0-client-id',
-  audience: 'https://api.noderadio.com',
-  redirectUri: window.location.origin, // Update this to your Vercel URL in production
-  cacheLocation: 'localstorage'
+  domain: 'dev-example.us.auth0.com', // Replace with your Auth0 domain
+  clientId: 'YOUR_CLIENT_ID', // Replace with your Auth0 client ID
+  audience: 'https://api.noderadio.com', // Replace with your API audience
+  redirectUri: window.location.origin, // Will be updated for production
+  cacheLocation: 'localstorage' // Use localstorage for better persistence
 };
+
+// Expose createAuth0Client if not available globally (fallback)
+window.createAuth0Client = window.createAuth0Client || createAuth0Client;
 
 // Auth0 client instance
 let auth0Client = null;
@@ -25,12 +28,27 @@ async function initAuth() {
     console.log('Initializing Auth0...');
     
     // Make sure Auth0 is loaded
-    if (typeof createAuth0Client !== 'function') {
+    if (typeof window.createAuth0Client !== 'function') {
+      console.error('Auth0 SDK not loaded. Trying fallback...');
+      
+      // Add a fallback script if Auth0 fails to load
+      if (!document.getElementById('auth0-fallback')) {
+        const script = document.createElement('script');
+        script.id = 'auth0-fallback';
+        script.src = 'https://cdn.jsdelivr.net/npm/@auth0/auth0-spa-js@2.1.3/dist/auth0-spa-js.production.min.js';
+        script.async = true;
+        script.onload = () => {
+          console.log('Auth0 SDK loaded via fallback');
+          initAuth(); // Try again after loading
+        };
+        document.head.appendChild(script);
+      }
+      
       throw new Error('Auth0 SDK not loaded. Check your internet connection and try again.');
     }
     
     // Create Auth0 client
-    auth0Client = await createAuth0Client({
+    auth0Client = await window.createAuth0Client({
       domain: auth0Config.domain,
       clientId: auth0Config.clientId,
       authorizationParams: {

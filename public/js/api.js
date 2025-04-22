@@ -1,6 +1,4 @@
-// API utility functions
-
-// Base API URL
+// API utilities for the application
 const API_BASE_URL = '/api';
 
 // API endpoints
@@ -29,44 +27,38 @@ const API_ENDPOINTS = {
   }
 };
 
-// Generic API request function
-async function apiRequest(endpoint, method = 'GET', data = null, requiresAuth = true) {
+// Generic fetch wrapper with error handling
+async function fetchAPI(endpoint, options = {}) {
+  const url = `${API_BASE_URL}${endpoint}`;
+  
+  // Default headers
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers
+  };
+  
+  // Get auth token if available
   try {
-    const headers = {
-      'Content-Type': 'application/json'
-    };
-
-    // Add authorization header if required and user is authenticated
-    if (requiresAuth) {
-      if (!isAuthenticated) {
-        throw new Error('User not authenticated');
-      }
-      
-      try {
-        // Get fresh token (might refresh if expired)
-        const token = await getAccessToken();
-        headers['Authorization'] = `Bearer ${token}`;
-      } catch (error) {
-        console.error('Failed to get access token:', error);
-        showToast('Authentication error. Please login again.', 'error');
-        throw new Error('Authentication required');
-      }
+    const token = await window.auth?.getTokenSilently();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
-
-    const options = {
-      method,
-      headers,
-      credentials: 'same-origin'
-    };
-
-    // Add request body for methods that require it
-    if (data && ['POST', 'PUT', 'PATCH'].includes(method)) {
-      options.body = JSON.stringify(data);
-    }
-
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
-
-    // Check if response is OK
+  } catch (error) {
+    console.error('Failed to get auth token:', error);
+  }
+  
+  // Create request options
+  const requestOptions = {
+    ...options,
+    headers,
+    credentials: 'same-origin'
+  };
+  
+  // Make the request
+  try {
+    const response = await fetch(url, requestOptions);
+    
+    // Handle non-2xx responses
     if (!response.ok) {
       // Handle authentication errors
       if (response.status === 401 || response.status === 403) {
@@ -78,13 +70,11 @@ async function apiRequest(endpoint, method = 'GET', data = null, requiresAuth = 
         throw new Error('Authentication failed');
       }
       
-      const errorData = await response.json().catch(() => ({
-        error: `HTTP error ${response.status}`
-      }));
-      throw new Error(errorData.error || errorData.message || `API request failed with status ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || errorData.error || `API error: ${response.status} ${response.statusText}`);
     }
-
-    // Return parsed JSON response if not empty, or just the response object
+    
+    // Check if response is JSON
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
       return await response.json();
@@ -92,7 +82,7 @@ async function apiRequest(endpoint, method = 'GET', data = null, requiresAuth = 
       return response;
     }
   } catch (error) {
-    console.error('API request error:', error);
+    console.error(`API error (${url}):`, error);
     if (error.message !== 'Authentication failed') {
       showToast(`API error: ${error.message}`, 'error');
     }
@@ -100,69 +90,157 @@ async function apiRequest(endpoint, method = 'GET', data = null, requiresAuth = 
   }
 }
 
-// Track related API calls
+// Track API methods
 const trackApi = {
-  // Get all tracks
   getAllTracks: async () => {
-    return await apiRequest(API_ENDPOINTS.tracks.list, 'GET', null, false);
+    return fetchAPI('/tracks');
   },
-
-  // Get single track by ID
-  getTrack: async (id) => {
-    return await apiRequest(API_ENDPOINTS.tracks.get(id), 'GET', null, false);
+  
+  getTrack: async (trackId) => {
+    return fetchAPI(`/tracks/${trackId}`);
   },
-
+  
+  createTrack: async (trackData) => {
+    return fetchAPI('/tracks', {
+      method: 'POST',
+      body: JSON.stringify(trackData)
+    });
+  },
+  
+  updateTrack: async (trackId, trackData) => {
+    return fetchAPI(`/tracks/${trackId}`, {
+      method: 'PUT',
+      body: JSON.stringify(trackData)
+    });
+  },
+  
+  deleteTrack: async (trackId) => {
+    return fetchAPI(`/tracks/${trackId}`, {
+      method: 'DELETE'
+    });
+  },
+  
+  uploadTrack: async (formData) => {
+    return fetch(`${API_BASE_URL}/tracks/upload`, {
+      method: 'POST',
+      body: formData,
+      // Do not set Content-Type header as it will be set automatically with the correct boundary
+      headers: {
+        Authorization: `Bearer ${await window.auth?.getTokenSilently().catch(() => '')}`
+      }
+    }).then(response => {
+      if (!response.ok) {
+        return response.json().then(data => {
+          throw new Error(data.message || `Upload failed: ${response.status} ${response.statusText}`);
+        });
+      }
+      return response.json();
+    });
+  },
+  
   // Get upload signature from Cloudinary
   getUploadSignature: async () => {
-    return await apiRequest(API_ENDPOINTS.tracks.upload.signature, 'GET');
+    return fetchAPI('/tracks/upload/signature');
   },
-
-  // Save track metadata after upload
-  saveTrack: async (trackData) => {
-    return await apiRequest(API_ENDPOINTS.tracks.list, 'POST', trackData);
-  },
-
-  // Delete track
-  deleteTrack: async (id) => {
-    return await apiRequest(API_ENDPOINTS.tracks.delete(id), 'DELETE');
-  },
-
+  
   // Increment play count
   incrementPlayCount: async (id) => {
-    return await apiRequest(API_ENDPOINTS.tracks.play(id), 'POST', null, false);
+    return fetchAPI(`/tracks/${id}/play`, {
+      method: 'POST'
+    });
   }
 };
 
-// Room related API calls
+// Room API methods
 const roomApi = {
-  // Get all rooms
   getAllRooms: async () => {
-    return await apiRequest(API_ENDPOINTS.rooms.list, 'GET', null, false);
+    return fetchAPI('/rooms');
   },
-
-  // Get single room by ID
-  getRoom: async (id) => {
-    return await apiRequest(API_ENDPOINTS.rooms.get(id), 'GET', null, false);
+  
+  getRoom: async (roomId) => {
+    return fetchAPI(`/rooms/${roomId}`);
   },
-
-  // Create a new room
+  
   createRoom: async (roomData) => {
-    return await apiRequest(API_ENDPOINTS.rooms.create, 'POST', roomData);
+    return fetchAPI('/rooms', {
+      method: 'POST',
+      body: JSON.stringify(roomData)
+    });
   },
-
+  
+  updateRoom: async (roomId, roomData) => {
+    return fetchAPI(`/rooms/${roomId}`, {
+      method: 'PUT',
+      body: JSON.stringify(roomData)
+    });
+  },
+  
+  deleteRoom: async (roomId) => {
+    return fetchAPI(`/rooms/${roomId}`, {
+      method: 'DELETE'
+    });
+  },
+  
+  joinRoom: async (roomId) => {
+    return fetchAPI(`/rooms/${roomId}/join`, {
+      method: 'POST'
+    });
+  },
+  
+  leaveRoom: async (roomId) => {
+    return fetchAPI(`/rooms/${roomId}/leave`, {
+      method: 'POST'
+    });
+  },
+  
+  addTrackToRoom: async (roomId, trackId) => {
+    return fetchAPI(`/rooms/${roomId}/tracks`, {
+      method: 'POST',
+      body: JSON.stringify({ trackId })
+    });
+  },
+  
+  removeTrackFromRoom: async (roomId, trackId) => {
+    return fetchAPI(`/rooms/${roomId}/tracks/${trackId}`, {
+      method: 'DELETE'
+    });
+  },
+  
   // Add track to room playlist
   addTrackToPlaylist: async (roomId, trackId) => {
-    return await apiRequest(API_ENDPOINTS.rooms.addTrack(roomId), 'POST', { trackId });
+    return fetchAPI(`/rooms/${roomId}/playlist`, {
+      method: 'POST',
+      body: JSON.stringify({ trackId })
+    });
   },
-
+  
   // Remove track from room playlist
   removeTrackFromPlaylist: async (roomId, trackIndex) => {
-    return await apiRequest(API_ENDPOINTS.rooms.removeTrack(roomId, trackIndex), 'DELETE');
+    return fetchAPI(`/rooms/${roomId}/playlist/${trackIndex}`, {
+      method: 'DELETE'
+    });
   },
-
+  
   // Update room state
   updateRoomState: async (roomId, stateData) => {
-    return await apiRequest(API_ENDPOINTS.rooms.updateState(roomId), 'PUT', stateData);
+    return fetchAPI(`/rooms/${roomId}/state`, {
+      method: 'PUT',
+      body: JSON.stringify(stateData)
+    });
+  }
+};
+
+// User API methods
+const userApi = {
+  getCurrentUser: async () => {
+    return fetchAPI('/users/me');
+  },
+  
+  updateProfile: async (userData) => {
+    return fetchAPI('/users/me', {
+      method: 'PUT',
+      body: JSON.stringify(userData)
+    });
   }
 };
 
@@ -170,18 +248,14 @@ const roomApi = {
 const authApi = {
   // Get user profile
   getUserProfile: async () => {
-    return await apiRequest(API_ENDPOINTS.auth.profile, 'GET');
+    return fetchAPI('/auth/profile');
   },
   
   // Logout (backend cleanup)
   logout: async () => {
-    if (isAuthenticated) {
-      try {
-        await apiRequest(API_ENDPOINTS.auth.logout, 'POST');
-      } catch (error) {
-        console.log('Backend logout error (continuing):', error);
-      }
-    }
+    return fetchAPI('/auth/logout', {
+      method: 'POST'
+    });
   }
 };
 
@@ -223,4 +297,10 @@ function showToast(message, type = 'info', duration = 3000) {
       toastContainer.removeChild(toast);
     }, 500);
   }, duration);
-} 
+}
+
+// Export the API utilities
+window.trackApi = trackApi;
+window.roomApi = roomApi;
+window.userApi = userApi;
+window.authApi = authApi; 
