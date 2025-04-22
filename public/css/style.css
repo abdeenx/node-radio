@@ -1,0 +1,125 @@
+/* Custom styles for Node Radio */
+
+/* Progress bar animations */
+@keyframes progress-pulse {
+  0% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.6;
+  }
+}
+
+.progress-animate {
+  animation: progress-pulse 1.5s infinite ease-in-out;
+}
+
+/* Custom range input styling */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: #4B5563;
+  border-radius: 0.25rem;
+  height: 0.5rem;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  background: #3B82F6;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 1rem;
+  height: 1rem;
+  background: #3B82F6;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+/* Room item styles */
+.room-item {
+  transition: all 0.2s ease;
+}
+
+.room-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.room-item.active {
+  border-left: 4px solid #3B82F6;
+}
+
+/* Track item styles */
+.track-item {
+  transition: all 0.2s ease;
+}
+
+.track-item:hover {
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+.track-item.active {
+  background-color: rgba(59, 130, 246, 0.2);
+  border-left: 4px solid #3B82F6;
+}
+
+/* Toast notification styles */
+.toast {
+  visibility: hidden;
+  min-width: 250px;
+  margin: 1rem 0;
+  background-color: #333;
+  color: #fff;
+  text-align: center;
+  border-radius: 0.25rem;
+  padding: 1rem;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  opacity: 0;
+  transition: opacity 0.5s, visibility 0.5s;
+}
+
+.toast.show {
+  visibility: visible;
+  opacity: 1;
+}
+
+.toast.success {
+  background-color: #10B981;
+}
+
+.toast.error {
+  background-color: #EF4444;
+}
+
+.toast.info {
+  background-color: #3B82F6;
+}
+
+/* Loading spinner */
+.spinner {
+  display: inline-block;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 0.25rem solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+} 
