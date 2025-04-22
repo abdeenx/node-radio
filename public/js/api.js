@@ -7,7 +7,8 @@ const API_BASE_URL = '/api';
 const API_ENDPOINTS = {
   auth: {
     register: '/auth/register',
-    profile: '/auth/profile'
+    profile: '/auth/profile',
+    logout: '/auth/logout'
   },
   tracks: {
     list: '/tracks',
@@ -36,8 +37,20 @@ async function apiRequest(endpoint, method = 'GET', data = null, requiresAuth = 
     };
 
     // Add authorization header if required and user is authenticated
-    if (requiresAuth && isAuthenticated && accessToken) {
-      headers['Authorization'] = `Bearer ${accessToken}`;
+    if (requiresAuth) {
+      if (!isAuthenticated) {
+        throw new Error('User not authenticated');
+      }
+      
+      try {
+        // Get fresh token (might refresh if expired)
+        const token = await getAccessToken();
+        headers['Authorization'] = `Bearer ${token}`;
+      } catch (error) {
+        console.error('Failed to get access token:', error);
+        showToast('Authentication error. Please login again.', 'error');
+        throw new Error('Authentication required');
+      }
     }
 
     const options = {
@@ -55,10 +68,20 @@ async function apiRequest(endpoint, method = 'GET', data = null, requiresAuth = 
 
     // Check if response is OK
     if (!response.ok) {
+      // Handle authentication errors
+      if (response.status === 401 || response.status === 403) {
+        // Clear current auth state and redirect to login
+        showToast('Your session has expired. Please login again.', 'warning');
+        setTimeout(() => {
+          login();
+        }, 1500);
+        throw new Error('Authentication failed');
+      }
+      
       const errorData = await response.json().catch(() => ({
         error: `HTTP error ${response.status}`
       }));
-      throw new Error(errorData.error || `API request failed with status ${response.status}`);
+      throw new Error(errorData.error || errorData.message || `API request failed with status ${response.status}`);
     }
 
     // Return parsed JSON response if not empty, or just the response object
@@ -70,7 +93,9 @@ async function apiRequest(endpoint, method = 'GET', data = null, requiresAuth = 
     }
   } catch (error) {
     console.error('API request error:', error);
-    showToast(`API error: ${error.message}`, 'error');
+    if (error.message !== 'Authentication failed') {
+      showToast(`API error: ${error.message}`, 'error');
+    }
     throw error;
   }
 }
@@ -138,6 +163,25 @@ const roomApi = {
   // Update room state
   updateRoomState: async (roomId, stateData) => {
     return await apiRequest(API_ENDPOINTS.rooms.updateState(roomId), 'PUT', stateData);
+  }
+};
+
+// Authentication related API calls
+const authApi = {
+  // Get user profile
+  getUserProfile: async () => {
+    return await apiRequest(API_ENDPOINTS.auth.profile, 'GET');
+  },
+  
+  // Logout (backend cleanup)
+  logout: async () => {
+    if (isAuthenticated) {
+      try {
+        await apiRequest(API_ENDPOINTS.auth.logout, 'POST');
+      } catch (error) {
+        console.log('Backend logout error (continuing):', error);
+      }
+    }
   }
 };
 
