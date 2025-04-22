@@ -7,14 +7,8 @@ const auth0Config = {
   cacheLocation: 'localstorage' // Use localstorage for better persistence
 };
 
-// Expose createAuth0Client if not available globally (fallback)
-window.createAuth0Client = window.createAuth0Client || createAuth0Client;
-
-// Auth0 client instance
-let auth0Client = null;
-let isAuthenticated = false;
-let userProfile = null;
-let accessToken = null;
+// Make auth client accessible globally
+window.auth = null;
 
 // DOM elements
 const loginButton = document.getElementById('login-button');
@@ -22,33 +16,53 @@ const logoutButton = document.getElementById('logout-button');
 const loginMessage = document.getElementById('login-message');
 const appContent = document.getElementById('app-content');
 
+// Check if debug logging is available
+function logDebug(message, category = 'auth') {
+  console.log(`[AUTH] ${message}`);
+  if (typeof debugLog === 'function') {
+    debugLog(message, category);
+  }
+}
+
 // Initialize Auth0 client
 async function initAuth() {
+  logDebug('Initializing Auth0...', 'auth');
+  logDebug(`Auth0 SDK available: ${typeof createAuth0Client === 'function' || typeof window.createAuth0Client === 'function'}`, 'auth');
+  
   try {
-    console.log('Initializing Auth0...');
-    
-    // Make sure Auth0 is loaded
-    if (typeof window.createAuth0Client !== 'function') {
-      console.error('Auth0 SDK not loaded. Trying fallback...');
+    // Check if Auth0 SDK is loaded
+    if (typeof createAuth0Client !== 'function' && typeof window.createAuth0Client !== 'function') {
+      logDebug('Auth0 SDK not loaded. Loading dynamically...', 'auth');
       
-      // Add a fallback script if Auth0 fails to load
-      if (!document.getElementById('auth0-fallback')) {
+      // Dynamically load Auth0 SDK
+      await new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.id = 'auth0-fallback';
-        script.src = 'https://cdn.jsdelivr.net/npm/@auth0/auth0-spa-js@2.1.3/dist/auth0-spa-js.production.min.js';
+        script.src = 'https://cdn.auth0.com/js/auth0-spa-js/2.1.3/auth0-spa-js.production.js';
         script.async = true;
         script.onload = () => {
-          console.log('Auth0 SDK loaded via fallback');
-          initAuth(); // Try again after loading
+          logDebug('Auth0 SDK loaded dynamically.', 'auth');
+          resolve();
+        };
+        script.onerror = () => {
+          reject(new Error('Failed to load Auth0 SDK dynamically.'));
         };
         document.head.appendChild(script);
-      }
+      });
       
-      throw new Error('Auth0 SDK not loaded. Check your internet connection and try again.');
+      // Check again after loading
+      if (typeof createAuth0Client !== 'function' && typeof window.createAuth0Client !== 'function') {
+        throw new Error('Auth0 SDK still not available after dynamic loading.');
+      }
     }
     
+    // Use the globally available createAuth0Client function
+    const createClient = window.createAuth0Client || createAuth0Client;
+    logDebug('Using Auth0 client creation function', 'auth');
+    
     // Create Auth0 client
-    auth0Client = await window.createAuth0Client({
+    logDebug(`Creating Auth0 client with domain: ${auth0Config.domain}`, 'auth');
+    
+    window.auth = await createClient({
       domain: auth0Config.domain,
       clientId: auth0Config.clientId,
       authorizationParams: {
@@ -57,37 +71,41 @@ async function initAuth() {
       },
       cacheLocation: auth0Config.cacheLocation
     });
+    
+    logDebug('Auth0 client created successfully', 'auth');
 
     // Check for authentication state on page load
     try {
       // If returning from Auth0 redirect
       if (window.location.search.includes('code=') && window.location.search.includes('state=')) {
+        logDebug('Auth redirect detected, handling callback', 'auth');
         // Handle the redirect and get the authentication result
-        const result = await auth0Client.handleRedirectCallback();
+        const result = await window.auth.handleRedirectCallback();
         
         // You can use the result object to check appState or other info passed on login
-        console.log('Auth redirect result:', result);
+        logDebug('Auth redirect result received', 'auth');
         
         // Clear the URL parameters
         window.history.replaceState({}, document.title, window.location.pathname);
       }
 
       // Check if user is authenticated
-      isAuthenticated = await auth0Client.isAuthenticated();
+      logDebug('Checking if user is authenticated', 'auth');
+      const isAuthenticated = await window.auth.isAuthenticated();
 
       if (isAuthenticated) {
-        console.log('User is authenticated');
+        logDebug('User is authenticated', 'auth');
         // Get user info and token
-        userProfile = await auth0Client.getUser();
-        accessToken = await auth0Client.getTokenSilently();
+        const userProfile = await window.auth.getUser();
+        const accessToken = await window.auth.getTokenSilently();
         
-        console.log('User profile:', userProfile);
+        logDebug(`User authenticated: ${userProfile.email}`, 'auth');
         
         // Register user on our backend
         try {
-          await registerUser();
+          await registerUser(userProfile, accessToken);
         } catch (registerError) {
-          console.error('Registration error:', registerError);
+          logDebug(`Registration error: ${registerError.message}`, 'auth');
           // Continue anyway - we can still use the app
         }
         
@@ -98,31 +116,31 @@ async function initAuth() {
         if (typeof initApp === 'function') {
           initApp();
         } else {
-          console.warn('initApp function not found');
+          logDebug('initApp function not found', 'auth');
         }
       } else {
-        console.log('User is not authenticated');
+        logDebug('User is not authenticated', 'auth');
         updateAuthUI(false);
       }
     } catch (authError) {
-      console.error('Authentication state error:', authError);
+      logDebug(`Authentication state error: ${authError.message}`, 'auth');
       updateAuthUI(false);
       showToast('Authentication error: ' + authError.message, 'error');
     }
   } catch (error) {
-    console.error('Auth0 initialization error:', error);
+    logDebug(`Auth0 initialization error: ${error.message}`, 'auth');
     updateAuthUI(false);
     showToast('Authentication service error: ' + error.message, 'error');
   }
 }
 
 // Register user with our backend
-async function registerUser() {
+async function registerUser(userProfile, accessToken) {
   if (!accessToken) {
     throw new Error('No access token available');
   }
   
-  console.log('Registering user with backend...');
+  logDebug('Registering user with backend...', 'auth');
   const response = await fetch('/api/auth/register', {
     method: 'POST',
     headers: {
@@ -143,13 +161,14 @@ async function registerUser() {
   }
   
   const userData = await response.json();
-  console.log('User registered successfully:', userData);
+  logDebug('User registered successfully', 'auth');
   showToast('Welcome back, ' + (userProfile.nickname || userProfile.name) + '!', 'success');
   return userData;
 }
 
 // Update UI based on authentication state
 function updateAuthUI(authenticated) {
+  logDebug(`Updating UI: authenticated=${authenticated}`, 'auth');
   if (authenticated) {
     loginButton.classList.add('hidden');
     logoutButton.classList.remove('hidden');
@@ -166,15 +185,22 @@ function updateAuthUI(authenticated) {
 // Login function
 async function login() {
   try {
-    console.log('Initiating login...');
-    await auth0Client.loginWithRedirect({
+    logDebug('Initiating login...', 'auth');
+    if (!window.auth) {
+      logDebug('Auth0 client not initialized', 'auth');
+      showToast('Authentication service not ready. Please try again.', 'error');
+      return;
+    }
+    
+    logDebug('Redirecting to Auth0 login page', 'auth');
+    await window.auth.loginWithRedirect({
       authorizationParams: {
         redirect_uri: auth0Config.redirectUri
       }
     });
     // Note: Code after this won't execute immediately since there's a redirect
   } catch (error) {
-    console.error('Login error:', error);
+    logDebug(`Login error: ${error.message}`, 'auth');
     showToast('Login error: ' + error.message, 'error');
   }
 }
@@ -182,63 +208,33 @@ async function login() {
 // Logout function
 async function logout() {
   try {
-    console.log('Logging out...');
+    logDebug('Logging out...', 'auth');
+    if (!window.auth) {
+      logDebug('Auth0 client not initialized', 'auth');
+      showToast('Authentication service not ready. Please try again.', 'error');
+      return;
+    }
     
     // Call backend logout endpoint if available
     if (typeof authApi !== 'undefined' && authApi.logout) {
       try {
         await authApi.logout();
       } catch (logoutError) {
-        console.warn('Backend logout error (continuing):', logoutError);
+        logDebug(`Backend logout error: ${logoutError.message}`, 'auth');
       }
     }
     
     // Logout from Auth0
-    await auth0Client.logout({
+    logDebug('Redirecting to Auth0 logout page', 'auth');
+    await window.auth.logout({
       logoutParams: {
         returnTo: window.location.origin
       }
     });
     // Note: Auth0 will redirect after logout
   } catch (error) {
-    console.error('Logout error:', error);
+    logDebug(`Logout error: ${error.message}`, 'auth');
     showToast('Logout error: ' + error.message, 'error');
-  }
-}
-
-// Refresh token function (useful for long sessions)
-async function refreshAuthToken() {
-  try {
-    console.log('Refreshing auth token...');
-    accessToken = await auth0Client.getTokenSilently();
-    return accessToken;
-  } catch (error) {
-    console.error('Token refresh error:', error);
-    // If refresh fails, user might need to login again
-    if (error.error === 'login_required') {
-      showToast('Your session has expired. Please log in again.', 'warning');
-      setTimeout(() => {
-        login();
-      }, 2000);
-    }
-    throw error;
-  }
-}
-
-// Get user token (with automatic refresh if needed)
-async function getAccessToken() {
-  if (!isAuthenticated) {
-    throw new Error('User not authenticated');
-  }
-  
-  try {
-    return await auth0Client.getTokenSilently();
-  } catch (error) {
-    if (error.error === 'login_required') {
-      // Token expired, try to refresh
-      return await refreshAuthToken();
-    }
-    throw error;
   }
 }
 
@@ -251,7 +247,7 @@ function showToast(message, type = 'info', duration = 3000) {
   }
   
   // Fallback implementation
-  console.log(`${type.toUpperCase()}: ${message}`);
+  logDebug(`Toast: ${type} - ${message}`, 'ui');
   
   // Create a basic toast if container exists
   const toastContainer = document.getElementById('toast-container');
@@ -273,25 +269,61 @@ function showToast(message, type = 'info', duration = 3000) {
   }
 }
 
-// Add a global error handler for auth errors
-window.addEventListener('unhandledrejection', function(event) {
-  const error = event.reason;
-  console.error('Unhandled promise rejection:', error);
-  if (error && error.error === 'login_required' || error.error === 'invalid_token') {
-    console.warn('Authentication token issue detected, redirecting to login');
-    if (auth0Client) {
-      login();
-    }
+// Add event listeners (must be done after DOM is loaded)
+function setupEventListeners() {
+  logDebug('Setting up Auth0 event listeners', 'auth');
+  
+  if (loginButton) {
+    logDebug('Login button found, adding event listener', 'auth');
+    // Remove any existing listeners to prevent duplicates
+    loginButton.removeEventListener('click', handleLoginClick);
+    // Add click handler
+    loginButton.addEventListener('click', handleLoginClick);
+  } else {
+    logDebug('Login button not found in the DOM!', 'auth');
   }
-});
-
-// Event listeners
-if (loginButton) {
-  loginButton.addEventListener('click', login);
+  
+  if (logoutButton) {
+    logDebug('Logout button found, adding event listener', 'auth');
+    // Remove any existing listeners to prevent duplicates
+    logoutButton.removeEventListener('click', handleLogoutClick);
+    // Add click handler
+    logoutButton.addEventListener('click', handleLogoutClick);
+  } else {
+    logDebug('Logout button not found in the DOM!', 'auth');
+  }
 }
-if (logoutButton) {
-  logoutButton.addEventListener('click', logout);
+
+// Button click handlers
+function handleLoginClick(e) {
+  e.preventDefault();
+  logDebug('Login button clicked', 'auth');
+  // Add a visual indicator that the button was clicked
+  loginButton.classList.add('bg-blue-800');
+  setTimeout(() => loginButton.classList.remove('bg-blue-800'), 300);
+  login();
+}
+
+function handleLogoutClick(e) {
+  e.preventDefault();
+  logDebug('Logout button clicked', 'auth');
+  // Add a visual indicator that the button was clicked
+  logoutButton.classList.add('bg-red-800');
+  setTimeout(() => logoutButton.classList.remove('bg-red-800'), 300);
+  logout();
 }
 
 // Initialize Auth0 when the page loads
-document.addEventListener('DOMContentLoaded', initAuth); 
+document.addEventListener('DOMContentLoaded', function() {
+  logDebug('DOM Content Loaded - Initializing Auth...', 'auth');
+  setupEventListeners();
+  initAuth();
+});
+
+// Export functions to the global scope for debugging
+window.authDebug = {
+  login,
+  logout,
+  initAuth,
+  setupEventListeners
+}; 

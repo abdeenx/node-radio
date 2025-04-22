@@ -27,6 +27,28 @@ const API_ENDPOINTS = {
   }
 };
 
+// Get the current auth token
+async function getAuthToken() {
+  if (!window.auth) {
+    console.warn('Auth client not available');
+    return null;
+  }
+  
+  try {
+    // Check if authenticated before requesting token
+    const isAuthenticated = await window.auth.isAuthenticated();
+    if (!isAuthenticated) {
+      console.warn('User not authenticated, cannot get token');
+      return null;
+    }
+    
+    return await window.auth.getTokenSilently();
+  } catch (error) {
+    console.error('Failed to get auth token:', error);
+    return null;
+  }
+}
+
 // Generic fetch wrapper with error handling
 async function fetchAPI(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
@@ -38,13 +60,9 @@ async function fetchAPI(endpoint, options = {}) {
   };
   
   // Get auth token if available
-  try {
-    const token = await window.auth?.getTokenSilently();
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-  } catch (error) {
-    console.error('Failed to get auth token:', error);
+  const token = await getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
   
   // Create request options
@@ -56,6 +74,7 @@ async function fetchAPI(endpoint, options = {}) {
   
   // Make the request
   try {
+    console.log(`API Request: ${options.method || 'GET'} ${url}`);
     const response = await fetch(url, requestOptions);
     
     // Handle non-2xx responses
@@ -65,7 +84,9 @@ async function fetchAPI(endpoint, options = {}) {
         // Clear current auth state and redirect to login
         showToast('Your session has expired. Please login again.', 'warning');
         setTimeout(() => {
-          login();
+          if (typeof login === 'function') {
+            login();
+          }
         }, 1500);
         throw new Error('Authentication failed');
       }
