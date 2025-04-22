@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const jwt = require('express-jwt');
+const { expressjwt: jwt } = require('express-jwt');
 const jwksRsa = require('jwks-rsa');
 const cloudinary = require('cloudinary').v2;
 const Track = require('../models/Track');
@@ -17,6 +17,17 @@ const checkJwt = jwt({
   audience: process.env.AUTH0_AUDIENCE,
   issuer: `https://${process.env.AUTH0_DOMAIN}/`,
   algorithms: ['RS256']
+});
+
+// Handle JWT validation errors
+router.use((err, req, res, next) => {
+  if (err.name === 'UnauthorizedError') {
+    return res.status(401).json({ 
+      error: 'Authentication error', 
+      message: 'Invalid token or missing authentication'
+    });
+  }
+  next(err);
 });
 
 // Get all tracks
@@ -75,7 +86,7 @@ router.post('/', checkJwt, async (req, res) => {
     const { title, artist, duration, cloudinaryUrl, cloudinaryPublicId } = req.body;
     
     // Get user ID from Auth0 ID
-    const user = await User.findOne({ auth0Id: req.user.sub });
+    const user = await User.findOne({ auth0Id: req.auth.sub });
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -115,7 +126,7 @@ router.delete('/:id', checkJwt, async (req, res) => {
     }
     
     // Check if user is the uploader
-    const user = await User.findOne({ auth0Id: req.user.sub });
+    const user = await User.findOne({ auth0Id: req.auth.sub });
     
     if (!user || !track.uploader.equals(user._id)) {
       return res.status(403).json({ error: 'Not authorized to delete this track' });

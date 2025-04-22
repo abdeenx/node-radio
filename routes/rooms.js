@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const jwt = require('express-jwt');
+const { expressjwt: jwt } = require('express-jwt');
 const jwksRsa = require('jwks-rsa');
 const Room = require('../models/Room');
 const User = require('../models/User');
@@ -17,6 +17,17 @@ const checkJwt = jwt({
   audience: process.env.AUTH0_AUDIENCE,
   issuer: `https://${process.env.AUTH0_DOMAIN}/`,
   algorithms: ['RS256']
+});
+
+// Handle JWT validation errors
+router.use((err, req, res, next) => {
+  if (err.name === 'UnauthorizedError') {
+    return res.status(401).json({ 
+      error: 'Authentication error', 
+      message: 'Invalid token or missing authentication'
+    });
+  }
+  next(err);
 });
 
 // Get all rooms
@@ -60,8 +71,8 @@ router.post('/', checkJwt, async (req, res) => {
   try {
     const { name, description } = req.body;
     
-    // Get user ID from Auth0 ID
-    const user = await User.findOne({ auth0Id: req.user.sub });
+    // Get user from Auth0 ID
+    const user = await User.findOne({ auth0Id: req.auth.sub });
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -77,10 +88,19 @@ router.post('/', checkJwt, async (req, res) => {
     const room = new Room({
       name,
       description,
-      createdBy: user._id
+      creator: user._id,
+      playlist: []
     });
     
     await room.save();
+    
+    // Add room to user's created rooms
+    if (user.createdRooms) {
+      user.createdRooms.push(room._id);
+    } else {
+      user.createdRooms = [room._id];
+    }
+    await user.save();
     
     res.status(201).json(room);
   } catch (error) {
@@ -95,7 +115,7 @@ router.post('/:id/playlist', checkJwt, async (req, res) => {
     const { trackId } = req.body;
     
     // Get user ID from Auth0 ID
-    const user = await User.findOne({ auth0Id: req.user.sub });
+    const user = await User.findOne({ auth0Id: req.auth.sub });
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -145,7 +165,7 @@ router.delete('/:roomId/playlist/:trackIndex', checkJwt, async (req, res) => {
     const { roomId, trackIndex } = req.params;
     
     // Get user ID from Auth0 ID
-    const user = await User.findOne({ auth0Id: req.user.sub });
+    const user = await User.findOne({ auth0Id: req.auth.sub });
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });

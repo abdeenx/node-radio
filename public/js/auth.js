@@ -22,6 +22,14 @@ const appContent = document.getElementById('app-content');
 // Initialize Auth0 client
 async function initAuth() {
   try {
+    console.log('Initializing Auth0...');
+    
+    // Make sure Auth0 is loaded
+    if (typeof createAuth0Client !== 'function') {
+      throw new Error('Auth0 SDK not loaded. Check your internet connection and try again.');
+    }
+    
+    // Create Auth0 client
     auth0Client = await createAuth0Client({
       domain: auth0Config.domain,
       clientId: auth0Config.clientId,
@@ -33,82 +41,93 @@ async function initAuth() {
     });
 
     // Check for authentication state on page load
-    // If returning from Auth0 redirect
-    if (window.location.search.includes('code=') && window.location.search.includes('state=')) {
-      // Handle the redirect and get the authentication result
-      const result = await auth0Client.handleRedirectCallback();
-      
-      // You can use the result object to check appState or other info passed on login
-      console.log('Auth redirect result:', result);
-      
-      // Clear the URL parameters
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
+    try {
+      // If returning from Auth0 redirect
+      if (window.location.search.includes('code=') && window.location.search.includes('state=')) {
+        // Handle the redirect and get the authentication result
+        const result = await auth0Client.handleRedirectCallback();
+        
+        // You can use the result object to check appState or other info passed on login
+        console.log('Auth redirect result:', result);
+        
+        // Clear the URL parameters
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
 
-    // Check if user is authenticated
-    isAuthenticated = await auth0Client.isAuthenticated();
+      // Check if user is authenticated
+      isAuthenticated = await auth0Client.isAuthenticated();
 
-    if (isAuthenticated) {
-      console.log('User is authenticated');
-      // Get user info and token
-      userProfile = await auth0Client.getUser();
-      accessToken = await auth0Client.getTokenSilently();
-      
-      console.log('User profile:', userProfile);
-      
-      // Register user on our backend
-      await registerUser();
-      
-      // Update UI to show authenticated state
-      updateAuthUI(true);
-      
-      // Initialize the app
-      initApp();
-    } else {
-      console.log('User is not authenticated');
+      if (isAuthenticated) {
+        console.log('User is authenticated');
+        // Get user info and token
+        userProfile = await auth0Client.getUser();
+        accessToken = await auth0Client.getTokenSilently();
+        
+        console.log('User profile:', userProfile);
+        
+        // Register user on our backend
+        try {
+          await registerUser();
+        } catch (registerError) {
+          console.error('Registration error:', registerError);
+          // Continue anyway - we can still use the app
+        }
+        
+        // Update UI to show authenticated state
+        updateAuthUI(true);
+        
+        // Initialize the app if the function exists
+        if (typeof initApp === 'function') {
+          initApp();
+        } else {
+          console.warn('initApp function not found');
+        }
+      } else {
+        console.log('User is not authenticated');
+        updateAuthUI(false);
+      }
+    } catch (authError) {
+      console.error('Authentication state error:', authError);
       updateAuthUI(false);
+      showToast('Authentication error: ' + authError.message, 'error');
     }
   } catch (error) {
-    console.error('Authentication error:', error);
+    console.error('Auth0 initialization error:', error);
     updateAuthUI(false);
-    showToast('Authentication error: ' + error.message, 'error');
+    showToast('Authentication service error: ' + error.message, 'error');
   }
 }
 
 // Register user with our backend
 async function registerUser() {
-  try {
-    if (!accessToken) {
-      throw new Error('No access token available');
-    }
-    
-    console.log('Registering user with backend...');
-    const response = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({
-        sub: userProfile.sub,
-        email: userProfile.email,
-        nickname: userProfile.nickname || userProfile.name,
-        picture: userProfile.picture
-      })
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      throw new Error(errorData.error || `Failed to register user: ${response.status}`);
-    }
-    
-    const userData = await response.json();
-    console.log('User registered successfully:', userData);
-    showToast('Welcome back, ' + (userProfile.nickname || userProfile.name) + '!', 'success');
-  } catch (error) {
-    console.error('Error registering user:', error);
-    showToast('Error registering user: ' + error.message, 'error');
+  if (!accessToken) {
+    throw new Error('No access token available');
   }
+  
+  console.log('Registering user with backend...');
+  const response = await fetch('/api/auth/register', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`
+    },
+    body: JSON.stringify({
+      sub: userProfile.sub,
+      email: userProfile.email,
+      nickname: userProfile.nickname || userProfile.name,
+      picture: userProfile.picture
+    })
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(errorData.error || `Failed to register user: ${response.status}`);
+  }
+  
+  const userData = await response.json();
+  console.log('User registered successfully:', userData);
+  showToast('Welcome back, ' + (userProfile.nickname || userProfile.name) + '!', 'success');
+  return userData;
 }
 
 // Update UI based on authentication state
@@ -118,9 +137,6 @@ function updateAuthUI(authenticated) {
     logoutButton.classList.remove('hidden');
     loginMessage.classList.add('hidden');
     appContent.classList.remove('hidden');
-    
-    // You could add user profile info to the UI here
-    // For example: document.getElementById('user-name').textContent = userProfile.name;
   } else {
     loginButton.classList.remove('hidden');
     logoutButton.classList.add('hidden');
@@ -151,8 +167,12 @@ async function logout() {
     console.log('Logging out...');
     
     // Call backend logout endpoint if available
-    if (typeof authApi !== 'undefined') {
-      await authApi.logout();
+    if (typeof authApi !== 'undefined' && authApi.logout) {
+      try {
+        await authApi.logout();
+      } catch (logoutError) {
+        console.warn('Backend logout error (continuing):', logoutError);
+      }
     }
     
     // Logout from Auth0
@@ -204,18 +224,56 @@ async function getAccessToken() {
   }
 }
 
+// Custom toast function if the main one is not available
+function showToast(message, type = 'info', duration = 3000) {
+  // Check if the main showToast function is defined in api.js
+  if (window.showToast) {
+    window.showToast(message, type, duration);
+    return;
+  }
+  
+  // Fallback implementation
+  console.log(`${type.toUpperCase()}: ${message}`);
+  
+  // Create a basic toast if container exists
+  const toastContainer = document.getElementById('toast-container');
+  if (toastContainer) {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    toast.style.padding = '10px 16px';
+    toast.style.marginBottom = '8px';
+    toast.style.borderRadius = '4px';
+    toast.style.backgroundColor = type === 'error' ? '#f44336' : 
+                                 type === 'success' ? '#4caf50' : 
+                                 type === 'warning' ? '#ff9800' : '#2196f3';
+    toast.style.color = 'white';
+    toastContainer.appendChild(toast);
+    setTimeout(() => {
+      toastContainer.removeChild(toast);
+    }, duration);
+  }
+}
+
 // Add a global error handler for auth errors
 window.addEventListener('unhandledrejection', function(event) {
   const error = event.reason;
-  if (error.error === 'login_required' || error.error === 'invalid_token') {
+  console.error('Unhandled promise rejection:', error);
+  if (error && error.error === 'login_required' || error.error === 'invalid_token') {
     console.warn('Authentication token issue detected, redirecting to login');
-    login();
+    if (auth0Client) {
+      login();
+    }
   }
 });
 
 // Event listeners
-loginButton.addEventListener('click', login);
-logoutButton.addEventListener('click', logout);
+if (loginButton) {
+  loginButton.addEventListener('click', login);
+}
+if (logoutButton) {
+  logoutButton.addEventListener('click', logout);
+}
 
 // Initialize Auth0 when the page loads
 document.addEventListener('DOMContentLoaded', initAuth); 

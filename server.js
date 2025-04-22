@@ -20,8 +20,10 @@ const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
     origin: '*',
-    methods: ['GET', 'POST']
-  }
+    methods: ['GET', 'POST'],
+    credentials: true
+  },
+  transports: ['websocket', 'polling']
 });
 
 // Configure Cloudinary
@@ -42,11 +44,12 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.auth0.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.auth0.com", "https://*.auth0.com"],
+      connectSrc: ["'self'", "https://*.auth0.com", "wss://*.auth0.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       mediaSrc: ["'self'", "https://res.cloudinary.com"],
-      imgSrc: ["'self'", "https://res.cloudinary.com", "data:"]
+      imgSrc: ["'self'", "https://res.cloudinary.com", "https://*.auth0.com", "data:"]
     }
   }
 }));
@@ -63,6 +66,15 @@ app.use('/api/rooms', roomsRoutes);
 // Serve the main HTML file for all other routes (SPA approach)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Global error handler - must be after routes
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({ 
+    error: 'Internal server error', 
+    message: process.env.NODE_ENV === 'production' ? 'Something went wrong' : err.message
+  });
 });
 
 // Socket.io connection handling

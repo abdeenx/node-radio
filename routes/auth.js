@@ -20,6 +20,7 @@ const checkJwt = jwt({
 // Global error handler for authentication errors
 router.use((err, req, res, next) => {
   if (err.name === 'UnauthorizedError') {
+    console.error('Auth error:', err.message);
     return res.status(401).json({ 
       error: 'Authentication error', 
       message: 'Invalid token or missing authentication'
