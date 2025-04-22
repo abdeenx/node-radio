@@ -1,10 +1,10 @@
 // Auth0 Configuration - Replace with your actual Auth0 app details
 const auth0Config = {
-  domain: 'dev-example.us.auth0.com', // Replace with your Auth0 domain
-  clientId: 'YOUR_CLIENT_ID', // Replace with your Auth0 client ID
-  audience: 'https://api.noderadio.com', // Replace with your API audience
-  redirectUri: window.location.origin, // Will be updated for production
-  cacheLocation: 'localstorage' // Use localstorage for better persistence
+  domain: 'dev-4ehbbvfyj6j25ymb.us.auth0.com', // Your Auth0 domain
+  clientId: 'gD07PIb4P7W1NlJqwCXcj9qjZh8XVHRx', // Your Auth0 client ID
+  audience: 'https://api.noderadio.com', // Keep this as is
+  redirectUri: window.location.origin, // Dynamic redirect URI
+  cacheLocation: 'localstorage' // For persistent logins
 };
 
 // Make auth client accessible globally
@@ -27,42 +27,18 @@ function logDebug(message, category = 'auth') {
 // Initialize Auth0 client
 async function initAuth() {
   logDebug('Initializing Auth0...', 'auth');
-  logDebug(`Auth0 SDK available: ${typeof createAuth0Client === 'function' || typeof window.createAuth0Client === 'function'}`, 'auth');
   
   try {
-    // Check if Auth0 SDK is loaded
-    if (typeof createAuth0Client !== 'function' && typeof window.createAuth0Client !== 'function') {
-      logDebug('Auth0 SDK not loaded. Loading dynamically...', 'auth');
-      
-      // Dynamically load Auth0 SDK
-      await new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'https://cdn.auth0.com/js/auth0-spa-js/2.1.3/auth0-spa-js.production.js';
-        script.async = true;
-        script.onload = () => {
-          logDebug('Auth0 SDK loaded dynamically.', 'auth');
-          resolve();
-        };
-        script.onerror = () => {
-          reject(new Error('Failed to load Auth0 SDK dynamically.'));
-        };
-        document.head.appendChild(script);
-      });
-      
-      // Check again after loading
-      if (typeof createAuth0Client !== 'function' && typeof window.createAuth0Client !== 'function') {
-        throw new Error('Auth0 SDK still not available after dynamic loading.');
-      }
+    // Check if Auth0 SDK is available in window
+    if (typeof createAuth0Client !== 'function') {
+      logDebug('Auth0 SDK not found in global scope', 'auth');
+      throw new Error('Auth0 SDK not available. Please check your internet connection.');
     }
     
-    // Use the globally available createAuth0Client function
-    const createClient = window.createAuth0Client || createAuth0Client;
-    logDebug('Using Auth0 client creation function', 'auth');
+    logDebug('Creating Auth0 client with domain: ' + auth0Config.domain, 'auth');
     
     // Create Auth0 client
-    logDebug(`Creating Auth0 client with domain: ${auth0Config.domain}`, 'auth');
-    
-    window.auth = await createClient({
+    window.auth = await createAuth0Client({
       domain: auth0Config.domain,
       clientId: auth0Config.clientId,
       authorizationParams: {
