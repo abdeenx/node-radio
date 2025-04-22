@@ -8,6 +8,7 @@ const cors = require('cors');
 const compression = require('compression');
 const helmet = require('helmet');
 const cloudinary = require('cloudinary').v2;
+const fs = require('fs');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -63,9 +64,34 @@ app.use('/api/auth', authRoutes);
 app.use('/api/tracks', tracksRoutes);
 app.use('/api/rooms', roomsRoutes);
 
+// Health check endpoint for Render
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', time: new Date().toISOString() });
+});
+
 // Serve the main HTML file for all other routes (SPA approach)
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  // Inject Auth0 configuration into the HTML
+  fs.readFile(path.join(__dirname, 'public', 'index.html'), 'utf8', (err, data) => {
+    if (err) {
+      console.error('Error reading index.html:', err);
+      return res.status(500).send('Error loading application');
+    }
+    
+    // Inject Auth0 configuration as global variables
+    const auth0Config = `
+      <script>
+        window.AUTH0_DOMAIN = "${process.env.AUTH0_DOMAIN || 'dev-4ehbbvfyj6j25ymb.us.auth0.com'}";
+        window.AUTH0_CLIENT_ID = "${process.env.AUTH0_CLIENT_ID || 'gD07PIb4P7W1NlJqwCXcj9qjZh8XVHRx'}";
+        window.AUTH0_AUDIENCE = "${process.env.AUTH0_AUDIENCE || 'https://api.noderadio.com'}";
+      </script>
+    `;
+    
+    // Insert Auth0 config before the closing head tag
+    const modifiedHtml = data.replace('</head>', `${auth0Config}</head>`);
+    
+    res.send(modifiedHtml);
+  });
 });
 
 // Global error handler - must be after routes

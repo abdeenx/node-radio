@@ -324,4 +324,130 @@ function showToast(message, type = 'info', duration = 3000) {
 window.trackApi = trackApi;
 window.roomApi = roomApi;
 window.userApi = userApi;
-window.authApi = authApi; 
+window.authApi = authApi;
+
+async function apiRequest(endpoint, method = 'GET', body = null, requiresAuth = true, retries = 2) {
+  try {
+    // Get authentication token if authentication is required
+    let headers = {
+      'Content-Type': 'application/json'
+    };
+
+    if (requiresAuth) {
+      try {
+        const token = await auth.getTokenSilently();
+        headers['Authorization'] = `Bearer ${token}`;
+      } catch (authError) {
+        console.error('Authentication error:', authError);
+        showToast('Authentication error. Please log in again.', 'error');
+        // Optional: Redirect to login page after a short delay
+        setTimeout(() => {
+          if (typeof login === 'function') {
+            login();
+          }
+        }, 1500);
+        throw new Error('Authentication failed');
+      }
+    }
+
+    const options = {
+      method,
+      headers,
+      credentials: 'same-origin' // Include cookies in the request
+    };
+
+    if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+      options.body = JSON.stringify(body);
+    }
+
+    // Network request with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    options.signal = controller.signal;
+
+    try {
+      const response = await fetch(`/api/${endpoint}`, options);
+      clearTimeout(timeoutId); // Clear timeout on success
+      
+      // Handle response status codes
+      if (!response.ok) {
+        // Special handling for authentication errors
+        if (response.status === 401 || response.status === 403) {
+          showToast('Your session has expired. Please login again.', 'warning');
+          setTimeout(() => {
+            if (typeof login === 'function') {
+              login();
+            }
+          }, 1500);
+          throw new Error('Authentication failed');
+        }
+        
+        // Try to get error details from response
+        try {
+          const errorData = await response.json();
+          throw new Error(errorData.message || `Request failed with status ${response.status}`);
+        } catch (jsonError) {
+          // If JSON parsing fails, throw generic error with status
+          throw new Error(`Request failed with status ${response.status}: ${response.statusText}`);
+        }
+      }
+      
+      // Handle successful responses
+      try {
+        // Check if the response has JSON content
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          return await response.json();
+        } else {
+          // For non-JSON responses
+          return { success: true, status: response.status };
+        }
+      } catch (jsonError) {
+        console.warn('Response is not valid JSON but request was successful:', jsonError);
+        return { success: true, status: response.status };
+      }
+    } catch (fetchError) {
+      clearTimeout(timeoutId); // Clear timeout on error
+      
+      // Determine if error is retryable
+      const isRetryable = 
+        fetchError.name === 'AbortError' || 
+        fetchError.message === 'Failed to fetch' || 
+        !navigator.onLine || 
+        (fetchError.message && fetchError.message.includes('network'));
+      
+      // Attempt retry if we have retries left and error is retryable
+      if (retries > 0 && isRetryable) {
+        console.log(`Retrying request to ${endpoint} (${retries} attempts left)`);
+        
+        // Add exponential backoff - wait longer between each retry
+        const backoffTime = Math.min(1000 * (2 ** (3 - retries)), 8000);
+        await new Promise(resolve => setTimeout(resolve, backoffTime));
+        
+        // Try again with one fewer retry
+        return apiRequest(endpoint, method, body, requiresAuth, retries - 1);
+      }
+      
+      // If no retries left or not retryable, handle the error
+      if (fetchError.name === 'AbortError') {
+        showToast('Request timed out. Please try again.', 'error');
+        throw new Error('Request timed out');
+      } else if (fetchError.message === 'Failed to fetch' || !navigator.onLine) {
+        showToast('Network error. Please check your connection.', 'error');
+        throw new Error('Network connection lost');
+      } else {
+        throw fetchError; // Rethrow other errors
+      }
+    }
+  } catch (error) {
+    // Root level error handling
+    console.error(`API request error (${endpoint}):`, error);
+    
+    // Don't display toast again for errors already handled
+    if (!['Authentication failed', 'Request timed out', 'Network connection lost'].includes(error.message)) {
+      showToast(error.message || 'An unexpected error occurred', 'error');
+    }
+    
+    throw error; // Rethrow for component-level handling if needed
+  }
+} 

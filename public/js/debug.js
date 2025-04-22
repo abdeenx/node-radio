@@ -36,14 +36,33 @@
         return 'dummy-token-for-testing';
       },
       
-      loginWithRedirect: async function(options) {
-        console.log('Fallback loginWithRedirect called', options);
-        alert('This is a test implementation. In a real app, you would be redirected to Auth0 login page.');
-        // For testing, you can uncomment this to simulate a redirect
-        // window.location.href = "https://dev-4ehbbvfyj6j25ymb.us.auth0.com/authorize?client_id=" + 
-        //   encodeURIComponent(auth0Config.clientId) + 
-        //   "&redirect_uri=" + encodeURIComponent(auth0Config.redirectUri) +
-        //   "&response_type=code&scope=openid%20profile%20email";
+      loginWithRedirect: async function(params) {
+        console.log('Fallback loginWithRedirect called', params);
+        
+        // Get the redirect URI from params or options
+        const redirectUri = params?.authorizationParams?.redirect_uri || 
+                           options.authorizationParams?.redirect_uri || 
+                           window.location.origin;
+        
+        // Get response type and scope
+        const responseType = "code";
+        const scope = params?.authorizationParams?.scope || 
+                     options.authorizationParams?.scope || 
+                     "openid profile email";
+        
+        // Build the Auth0 authorize URL
+        const authorizeUrl = `https://${options.domain}/authorize` +
+          `?client_id=${encodeURIComponent(options.clientId)}` +
+          `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+          `&response_type=${responseType}` +
+          `&scope=${encodeURIComponent(scope)}` +
+          `&state=${encodeURIComponent(Math.random().toString(36).substring(2, 15))}` +
+          `&nonce=${encodeURIComponent(Math.random().toString(36).substring(2, 15))}`;
+        
+        console.log('Redirecting to Auth0:', authorizeUrl);
+        
+        // Redirect to Auth0 login page
+        window.location.href = authorizeUrl;
       },
       
       handleRedirectCallback: async function() {
@@ -51,9 +70,22 @@
         return { appState: {} };
       },
       
-      logout: async function(options) {
-        console.log('Fallback logout called', options);
-        alert('This is a test implementation. In a real app, you would be logged out and redirected.');
+      logout: async function(params) {
+        console.log('Fallback logout called', params);
+        
+        // Get the returnTo URL
+        const returnTo = params?.logoutParams?.returnTo || 
+                        window.location.origin;
+        
+        // Build the logout URL
+        const logoutUrl = `https://${options.domain}/v2/logout` +
+          `?client_id=${encodeURIComponent(options.clientId)}` +
+          `&returnTo=${encodeURIComponent(returnTo)}`;
+        
+        console.log('Redirecting to Auth0 logout:', logoutUrl);
+        
+        // Redirect to Auth0 logout page
+        window.location.href = logoutUrl;
       }
     };
   };
