@@ -5,7 +5,13 @@ const auth0Config = {
   clientId: window.AUTH0_CLIENT_ID || 'gD07PIb4P7W1NlJqwCXcj9qjZh8XVHRx', // Your Auth0 client ID
   audience: window.AUTH0_AUDIENCE || 'https://api.noderadio.com', // API audience
   redirectUri: window.location.origin, // Dynamic redirect URI
-  cacheLocation: 'localstorage' // For persistent logins
+  cacheLocation: 'localstorage', // For persistent logins
+  // Add response_type and scope explicitly
+  authorizationParams: {
+    redirect_uri: window.location.origin,
+    response_type: 'code',
+    scope: 'openid profile email'
+  }
 };
 
 // Make auth client accessible globally
@@ -41,11 +47,6 @@ async function initAuth() {
     // Set default styling for login button - ensure it's visible
     if (loginButton) {
       loginButton.style.display = 'inline-block';
-      loginButton.style.backgroundColor = '#3B82F6'; // blue-500
-      loginButton.style.color = 'white';
-      loginButton.style.padding = '0.5rem 1rem';
-      loginButton.style.borderRadius = '0.375rem';
-      loginButton.style.cursor = 'pointer';
     }
     
     // Check if Auth0 SDK is available in window
@@ -55,14 +56,56 @@ async function initAuth() {
       // Use the fallback or direct login approach
       setupEventListeners();
       updateAuthUI(false);
+      
+      // Check if we have an authorization code in the URL (for the callback)
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('code') && urlParams.has('state')) {
+        logDebug('Auth callback detected, handling manually', 'auth');
+        
+        // Verify state to prevent CSRF
+        const returnedState = urlParams.get('state');
+        const storedState = localStorage.getItem('auth_state');
+        
+        if (returnedState === storedState) {
+          logDebug('State verification passed, processing callback', 'auth');
+          
+          // Clear state from localStorage
+          localStorage.removeItem('auth_state');
+          
+          // Remove code and state from URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+          
+          // Show authenticated UI
+          updateAuthUI(true);
+          showToast('Successfully logged in!', TOAST_TYPES.SUCCESS);
+          
+          // Initialize the app if the function exists
+          if (typeof initApp === 'function') {
+            initApp();
+          }
+        } else {
+          logDebug('State verification failed, possible CSRF attack', 'auth');
+          showToast('Authentication failed: Invalid state', TOAST_TYPES.ERROR);
+        }
+      }
+      
       return;
     }
     
     logDebug('Creating Auth0 client with domain: ' + auth0Config.domain, 'auth');
     
-    // Create Auth0 client
-    window.auth = await createAuth0Client(auth0Config);
-    logDebug('Auth0 client created successfully', 'auth');
+    // Create Auth0 client with improved error handling
+    try {
+      window.auth = await createAuth0Client(auth0Config);
+      logDebug('Auth0 client created successfully', 'auth');
+    } catch (error) {
+      logDebug(`Error creating Auth0 client: ${error.message}`, 'auth');
+      showToast('Authentication service initialization failed. Using fallback login.', TOAST_TYPES.WARNING);
+      // Set up fallback
+      setupEventListeners();
+      updateAuthUI(false);
+      return;
+    }
 
     // Check for authentication state on page load
     try {
@@ -177,23 +220,43 @@ async function login() {
   try {
     logDebug('Initiating login...', 'auth');
     if (!window.auth) {
-      logDebug('Auth0 client not initialized', 'auth');
-      showToast('Authentication service not ready. Please try again.', TOAST_TYPES.ERROR);
-      return false;
+      logDebug('Auth0 client not initialized, using fallback login', 'auth');
+      // Fallback to direct login if Auth0 client is not available
+      directLogin();
+      return true;
     }
     
     logDebug('Redirecting to Auth0 login page', 'auth');
-    await window.auth.loginWithRedirect({
-      authorizationParams: {
-        redirect_uri: auth0Config.redirectUri
-      }
-    });
+    await window.auth.loginWithRedirect();
     // Note: Code after this won't execute immediately since there's a redirect
+    return true;
   } catch (error) {
     logDebug(`Login error: ${error.message}`, 'auth');
     showToast('Login error: ' + error.message, TOAST_TYPES.ERROR);
     return false;
   }
+}
+
+// Direct login function as a fallback
+function directLogin() {
+  logDebug('Using direct login function', 'auth');
+  
+  const { domain, clientId } = auth0Config;
+  const redirectUri = window.location.origin;
+  const state = Math.random().toString(36).substring(2, 15);
+  
+  // Store state in localStorage to verify when returning
+  localStorage.setItem('auth_state', state);
+  
+  const authUrl = `https://${domain}/authorize` +
+    `?client_id=${encodeURIComponent(clientId)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&response_type=code` +
+    `&scope=${encodeURIComponent('openid profile email')}` +
+    `&state=${encodeURIComponent(state)}`;
+  
+  logDebug('Redirecting to Auth0 via direct URL: ' + authUrl, 'auth');
+  window.location.href = authUrl;
 }
 
 // Logout function
@@ -290,25 +353,30 @@ function handleLoginClick(e) {
   // Try to log in with Auth0 client first
   if (window.auth) {
     login();
+  } else if (typeof directLogin === 'function') {
+    // Fallback to direct login
+    directLogin();
   } else if (typeof window.directLogin === 'function') {
-    // Fallback to direct login if Auth0 client is not available
-    logDebug('Using direct login function', 'auth');
+    // Fallback to global direct login if available
     window.directLogin();
   } else {
     // Last resort: direct redirect to Auth0 login page
-    logDebug('Using hardcoded redirect to Auth0', 'auth');
+    logDebug('Using hardcoded direct Auth0 login', 'auth');
     const domain = auth0Config.domain;
     const clientId = auth0Config.clientId;
-    const redirectUri = auth0Config.redirectUri;
+    const redirectUri = window.location.origin;
     
-    const authorizeUrl = `https://${domain}/authorize` +
+    const state = Math.random().toString(36).substring(2, 15);
+    localStorage.setItem('auth_state', state);
+    
+    const authUrl = `https://${domain}/authorize` +
       `?client_id=${encodeURIComponent(clientId)}` +
       `&redirect_uri=${encodeURIComponent(redirectUri)}` +
       `&response_type=code` +
       `&scope=${encodeURIComponent('openid profile email')}` +
-      `&state=${encodeURIComponent(Math.random().toString(36).substring(2, 15))}`;
+      `&state=${encodeURIComponent(state)}`;
     
-    window.location.href = authorizeUrl;
+    window.location.href = authUrl;
   }
 }
 

@@ -232,9 +232,14 @@
       redirectUri: window.location.origin
     };
     
+    // Make Auth0 config globally available
+    window.AUTH0_DOMAIN = auth0Config.domain;
+    window.AUTH0_CLIENT_ID = auth0Config.clientId;
+    window.AUTH0_REDIRECT_URI = auth0Config.redirectUri;
+    
     // Direct login function (fallback for Auth0 SDK)
     function directLogin() {
-      debugLog('Using direct login', 'auth');
+      debugLog('Using direct login from index.html', 'auth');
       
       const { domain, clientId, redirectUri } = auth0Config;
       const state = Math.random().toString(36).substring(2);
@@ -249,7 +254,7 @@
         `&scope=${encodeURIComponent('openid profile email')}` +
         `&state=${encodeURIComponent(state)}`;
       
-      debugLog('Redirecting to Auth0', 'auth');
+      debugLog('Redirecting to Auth0: ' + authUrl, 'auth');
       window.location.href = authUrl;
     }
     
@@ -265,7 +270,11 @@
         loginButton.addEventListener('click', function(e) {
           e.preventDefault();
           debugLog('Login button clicked', 'auth');
-          directLogin();
+          if (typeof handleLoginClick === 'function') {
+            handleLoginClick(e);
+          } else {
+            directLogin();
+          }
         });
       }
       
@@ -273,14 +282,20 @@
         bigLoginButton.addEventListener('click', function(e) {
           e.preventDefault();
           debugLog('Big login button clicked', 'auth');
-          directLogin();
+          if (typeof handleLoginClick === 'function') {
+            handleLoginClick(e);
+          } else {
+            directLogin();
+          }
         });
       }
       
-      // Check URL for auth callback
+      // Check URL for auth callback if auth.js hasn't loaded yet
       const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.has('code') && urlParams.has('state')) {
-        debugLog('Auth callback detected', 'auth');
+      if (urlParams.has('code') && urlParams.has('state') && 
+          typeof window.auth === 'undefined' && 
+          typeof initAuth === 'undefined') {
+        debugLog('Auth callback detected, handling inline', 'auth');
         
         // Verify state to prevent CSRF
         const returnedState = urlParams.get('state');
@@ -299,13 +314,13 @@
           showAuthenticatedUI();
           
           // Show success message
-          showToast('Successfully logged in!', 'success');
+          showToast('Successfully logged in!', TOAST_TYPES.SUCCESS);
           
           // Load the main app
           loadApp();
         } else {
           debugLog('Auth state invalid, possible CSRF', 'auth');
-          showToast('Authentication failed: Invalid state', 'error');
+          showToast('Authentication failed: Invalid state', TOAST_TYPES.ERROR);
         }
       }
     });
@@ -334,12 +349,16 @@
           e.preventDefault();
           debugLog('Logout button clicked', 'auth');
           
-          const { domain, clientId, redirectUri } = auth0Config;
-          
-          // Redirect to logout URL
-          window.location.href = `https://${domain}/v2/logout` +
-            `?client_id=${encodeURIComponent(clientId)}` +
-            `&returnTo=${encodeURIComponent(redirectUri)}`;
+          if (typeof handleLogoutClick === 'function') {
+            handleLogoutClick(e);
+          } else {
+            const { domain, clientId, redirectUri } = auth0Config;
+            
+            // Redirect to logout URL
+            window.location.href = `https://${domain}/v2/logout` +
+              `?client_id=${encodeURIComponent(clientId)}` +
+              `&returnTo=${encodeURIComponent(redirectUri)}`;
+          }
         });
       }
     }
@@ -360,15 +379,24 @@
           initApp();
         } else {
           debugLog('App initialization function not found', 'app');
-          showToast('Error loading application', 'error');
+          showToast('Error loading application', TOAST_TYPES.ERROR);
         }
       };
       appScript.onerror = function() {
         debugLog('Failed to load app script', 'app');
-        showToast('Error loading application resources', 'error');
+        showToast('Error loading application resources', TOAST_TYPES.ERROR);
       };
       document.body.appendChild(appScript);
     }
   </script>
+  
+  <!-- Auth0 SDK -->
+  <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
+  
+  <!-- Load auth.js after Auth0 SDK -->
+  <script src="/js/auth.js"></script>
+  
+  <!-- Auth0 Debug Tool - Press Alt+D to show debug panel -->
+  <script src="/js/debug-auth.js"></script>
 </body>
 </html> 
