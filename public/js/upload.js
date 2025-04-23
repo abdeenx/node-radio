@@ -26,7 +26,7 @@ async function loadTrackLibrary() {
     renderTrackLibrary(tracks);
   } catch (error) {
     console.error('Error loading track library:', error);
-    showToast('Error loading tracks', 'error');
+    showToast('Error loading tracks', TOAST_TYPES.ERROR);
   }
 }
 
@@ -78,14 +78,14 @@ async function handleUpload(event) {
   const file = trackFileInput.files[0];
   
   if (!title || !artist || !file) {
-    showToast('Please fill in all fields and select a file', 'error');
+    showToast('Please fill in all fields and select a file', TOAST_TYPES.ERROR);
     return;
   }
   
   // Validate file type
   const validAudioTypes = ['audio/mp3', 'audio/mpeg', 'audio/wav', 'audio/ogg'];
   if (!validAudioTypes.includes(file.type)) {
-    showToast('Please select a valid audio file (MP3, WAV, OGG)', 'error');
+    showToast('Please select a valid audio file (MP3, WAV, OGG)', TOAST_TYPES.ERROR);
     return;
   }
   
@@ -145,7 +145,7 @@ async function handleUpload(event) {
         uploadForm.reset();
         uploadProgress.classList.add('hidden');
         
-        showToast('Track uploaded successfully', 'success');
+        showToast('Track uploaded successfully', TOAST_TYPES.SUCCESS);
         
         // Refresh track library
         loadTrackLibrary();
@@ -156,7 +156,7 @@ async function handleUpload(event) {
     
     xhr.addEventListener('error', () => {
       uploadProgress.classList.add('hidden');
-      showToast('Upload failed', 'error');
+      showToast('Upload failed', TOAST_TYPES.ERROR);
     });
     
     xhr.open('POST', 'https://api.cloudinary.com/v1_1/' + signatureData.cloudName + '/auto/upload');
@@ -165,7 +165,7 @@ async function handleUpload(event) {
   } catch (error) {
     console.error('Error uploading track:', error);
     uploadProgress.classList.add('hidden');
-    showToast('Error uploading track: ' + error.message, 'error');
+    showToast('Error uploading track: ' + error.message, TOAST_TYPES.ERROR);
   }
 }
 

@@ -4,6 +4,9 @@
 function initApp() {
   console.log('Initializing application...');
   
+  // First ensure the create room modal is hidden
+  hideCreateRoomModal();
+  
   // Initialize socket connection
   initSocketConnection();
   
@@ -17,13 +20,45 @@ function initApp() {
   console.log('Application initialized successfully');
 }
 
+// Helper function to hide the create room modal
+function hideCreateRoomModal() {
+  const modal = document.getElementById('create-room-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+// Helper function to show the create room modal only if user is authenticated
+function showCreateRoomModal() {
+  // Check if user is authenticated
+  if (window.auth && typeof window.auth.isAuthenticated === 'function') {
+    window.auth.isAuthenticated().then(isAuthenticated => {
+      if (isAuthenticated) {
+        const modal = document.getElementById('create-room-modal');
+        if (modal) {
+          modal.classList.remove('hidden');
+        }
+      } else {
+        console.warn('User tried to create a room but is not authenticated');
+        showToast('Please log in to create a room', TOAST_TYPES.WARNING);
+      }
+    }).catch(error => {
+      console.error('Error checking authentication status:', error);
+      showToast('Please log in to create a room', TOAST_TYPES.WARNING);
+    });
+  } else {
+    console.warn('Auth client not available');
+    showToast('Please log in to create a room', TOAST_TYPES.WARNING);
+  }
+}
+
 // If user is already authenticated, init will be called from auth.js
 // Otherwise, we'll wait for authentication
 
 // Error handling for global errors
 window.addEventListener('error', (event) => {
   console.error('Global error:', event.error);
-  showToast('Application error: ' + event.error.message, 'error');
+  showToast('Application error: ' + event.error.message, TOAST_TYPES.ERROR);
 });
 
 // Initialize socket connection
@@ -35,21 +70,21 @@ function initSocketConnection() {
     // Set up socket event listeners
     window.socket.on('connect', () => {
       console.log('Socket connected:', window.socket.id);
-      showToast('Connected to server', 'success');
+      showToast('Connected to server', TOAST_TYPES.SUCCESS);
     });
     
     window.socket.on('disconnect', () => {
       console.log('Socket disconnected');
-      showToast('Disconnected from server', 'warning');
+      showToast('Disconnected from server', TOAST_TYPES.WARNING);
     });
     
     window.socket.on('connect_error', (error) => {
       console.error('Socket connection error:', error);
-      showToast('Connection error: ' + error.message, 'error');
+      showToast('Connection error: ' + error.message, TOAST_TYPES.ERROR);
     });
   } catch (error) {
     console.error('Failed to initialize socket connection:', error);
-    showToast('Failed to connect to server', 'error');
+    showToast('Failed to connect to server', TOAST_TYPES.ERROR);
   }
 }
 
@@ -60,7 +95,7 @@ async function fetchTracks() {
     updateTrackLibrary(tracks);
   } catch (error) {
     console.error('Failed to fetch tracks:', error);
-    showToast('Failed to load tracks', 'error');
+    showToast('Failed to load tracks', TOAST_TYPES.ERROR);
   }
 }
 
@@ -71,7 +106,7 @@ async function fetchRooms() {
     updateRoomsList(rooms);
   } catch (error) {
     console.error('Failed to fetch rooms:', error);
-    showToast('Failed to load rooms', 'error');
+    showToast('Failed to load rooms', TOAST_TYPES.ERROR);
   }
 }
 
@@ -81,10 +116,7 @@ function setupUIInteractions() {
   const createRoomButton = document.getElementById('create-room-button');
   if (createRoomButton) {
     createRoomButton.addEventListener('click', () => {
-      const modal = document.getElementById('create-room-modal');
-      if (modal) {
-        modal.classList.remove('hidden');
-      }
+      showCreateRoomModal();
     });
   }
   
@@ -92,10 +124,7 @@ function setupUIInteractions() {
   const cancelCreateRoomButton = document.getElementById('cancel-create-room');
   if (cancelCreateRoomButton) {
     cancelCreateRoomButton.addEventListener('click', () => {
-      const modal = document.getElementById('create-room-modal');
-      if (modal) {
-        modal.classList.add('hidden');
-      }
+      hideCreateRoomModal();
     });
   }
 }
@@ -185,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const descriptionInput = document.getElementById('room-description-input');
       
       if (!nameInput || !nameInput.value.trim()) {
-        showToast('Please enter a room name', 'error');
+        showToast('Please enter a room name', TOAST_TYPES.ERROR);
         return;
       }
       
@@ -210,10 +239,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Refresh rooms list
         fetchRooms();
         
-        showToast(`Room "${createdRoom.name}" created successfully`, 'success');
+        showToast(`Room "${createdRoom.name}" created successfully`, TOAST_TYPES.SUCCESS);
       } catch (error) {
         console.error('Failed to create room:', error);
-        showToast('Failed to create room: ' + error.message, 'error');
+        showToast('Failed to create room: ' + error.message, TOAST_TYPES.ERROR);
       }
     });
   }

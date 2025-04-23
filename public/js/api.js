@@ -27,241 +27,146 @@ const API_ENDPOINTS = {
   }
 };
 
-// Get the current auth token
-async function getAuthToken() {
-  if (!window.auth) {
-    console.warn('Auth client not available');
-    return null;
-  }
-  
-  try {
-    // Check if authenticated before requesting token
-    const isAuthenticated = await window.auth.isAuthenticated();
-    if (!isAuthenticated) {
-      console.warn('User not authenticated, cannot get token');
-      return null;
-    }
-    
-    return await window.auth.getTokenSilently();
-  } catch (error) {
-    console.error('Failed to get auth token:', error);
-    return null;
-  }
-}
-
-// Generic fetch wrapper with error handling
-async function fetchAPI(endpoint, options = {}) {
-  const url = `${API_BASE_URL}${endpoint}`;
-  
-  // Default headers
-  const headers = {
-    'Content-Type': 'application/json',
-    ...options.headers
-  };
-  
-  // Get auth token if available
-  const token = await getAuthToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  
-  // Create request options
-  const requestOptions = {
-    ...options,
-    headers,
-    credentials: 'same-origin'
-  };
-  
-  // Make the request
-  try {
-    console.log(`API Request: ${options.method || 'GET'} ${url}`);
-    const response = await fetch(url, requestOptions);
-    
-    // Handle non-2xx responses
-    if (!response.ok) {
-      // Handle authentication errors
-      if (response.status === 401 || response.status === 403) {
-        // Clear current auth state and redirect to login
-        showToast('Your session has expired. Please login again.', 'warning');
-        setTimeout(() => {
-          if (typeof login === 'function') {
-            login();
-          }
-        }, 1500);
-        throw new Error('Authentication failed');
-      }
-      
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || errorData.error || `API error: ${response.status} ${response.statusText}`);
-    }
-    
-    // Check if response is JSON
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      return await response.json();
-    } else {
-      return response;
-    }
-  } catch (error) {
-    console.error(`API error (${url}):`, error);
-    if (error.message !== 'Authentication failed') {
-      showToast(`API error: ${error.message}`, 'error');
-    }
-    throw error;
-  }
-}
+// Initialize the API handler with our base URL
+const api = window.apiHandler || new ApiHandler(API_BASE_URL);
 
 // Track API methods
 const trackApi = {
   getAllTracks: async () => {
-    return fetchAPI('/tracks');
+    const response = await api.get('/tracks');
+    return response.data;
   },
   
   getTrack: async (trackId) => {
-    return fetchAPI(`/tracks/${trackId}`);
+    const response = await api.get(`/tracks/${trackId}`);
+    return response.data;
   },
   
   createTrack: async (trackData) => {
-    return fetchAPI('/tracks', {
-      method: 'POST',
-      body: JSON.stringify(trackData)
-    });
+    const response = await api.post('/tracks', trackData);
+    return response.data;
   },
   
   updateTrack: async (trackId, trackData) => {
-    return fetchAPI(`/tracks/${trackId}`, {
-      method: 'PUT',
-      body: JSON.stringify(trackData)
-    });
+    const response = await api.put(`/tracks/${trackId}`, trackData);
+    return response.data;
   },
   
   deleteTrack: async (trackId) => {
-    return fetchAPI(`/tracks/${trackId}`, {
-      method: 'DELETE'
-    });
+    const response = await api.delete(`/tracks/${trackId}`);
+    return response.data;
   },
   
   uploadTrack: async (formData) => {
-    return fetch(`${API_BASE_URL}/tracks/upload`, {
-      method: 'POST',
-      body: formData,
-      // Do not set Content-Type header as it will be set automatically with the correct boundary
-      headers: {
-        Authorization: `Bearer ${await window.auth?.getTokenSilently().catch(() => '')}`
-      }
-    }).then(response => {
-      if (!response.ok) {
-        return response.json().then(data => {
-          throw new Error(data.message || `Upload failed: ${response.status} ${response.statusText}`);
-        });
-      }
-      return response.json();
-    });
+    // Special case for file uploads - need to use fetch directly
+    // Don't set Content-Type header as it will be set automatically with the correct boundary
+    const token = localStorage.getItem('auth_token');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/tracks/upload`, {
+        method: 'POST',
+        body: formData,
+        headers
+      });
+      
+      // Process the response through our normalizer
+      return api.normalizeResponse(response);
+    } catch (error) {
+      showToast(`Upload failed: ${error.message}`, 'error');
+      throw error;
+    }
   },
   
   // Get upload signature from Cloudinary
   getUploadSignature: async () => {
-    return fetchAPI('/tracks/upload/signature');
+    const response = await api.get('/tracks/upload/signature');
+    return response.data;
   },
   
   // Increment play count
   incrementPlayCount: async (id) => {
-    return fetchAPI(`/tracks/${id}/play`, {
-      method: 'POST'
-    });
+    const response = await api.post(`/tracks/${id}/play`);
+    return response.data;
   }
 };
 
 // Room API methods
 const roomApi = {
   getAllRooms: async () => {
-    return fetchAPI('/rooms');
+    const response = await api.get('/rooms');
+    return response.data;
   },
   
   getRoom: async (roomId) => {
-    return fetchAPI(`/rooms/${roomId}`);
+    const response = await api.get(`/rooms/${roomId}`);
+    return response.data;
   },
   
   createRoom: async (roomData) => {
-    return fetchAPI('/rooms', {
-      method: 'POST',
-      body: JSON.stringify(roomData)
-    });
+    const response = await api.post('/rooms', roomData);
+    return response.data;
   },
   
   updateRoom: async (roomId, roomData) => {
-    return fetchAPI(`/rooms/${roomId}`, {
-      method: 'PUT',
-      body: JSON.stringify(roomData)
-    });
+    const response = await api.put(`/rooms/${roomId}`, roomData);
+    return response.data;
   },
   
   deleteRoom: async (roomId) => {
-    return fetchAPI(`/rooms/${roomId}`, {
-      method: 'DELETE'
-    });
+    const response = await api.delete(`/rooms/${roomId}`);
+    return response.data;
   },
   
   joinRoom: async (roomId) => {
-    return fetchAPI(`/rooms/${roomId}/join`, {
-      method: 'POST'
-    });
+    const response = await api.post(`/rooms/${roomId}/join`);
+    return response.data;
   },
   
   leaveRoom: async (roomId) => {
-    return fetchAPI(`/rooms/${roomId}/leave`, {
-      method: 'POST'
-    });
+    const response = await api.post(`/rooms/${roomId}/leave`);
+    return response.data;
   },
   
   addTrackToRoom: async (roomId, trackId) => {
-    return fetchAPI(`/rooms/${roomId}/tracks`, {
-      method: 'POST',
-      body: JSON.stringify({ trackId })
-    });
+    const response = await api.post(`/rooms/${roomId}/tracks`, { trackId });
+    return response.data;
   },
   
   removeTrackFromRoom: async (roomId, trackId) => {
-    return fetchAPI(`/rooms/${roomId}/tracks/${trackId}`, {
-      method: 'DELETE'
-    });
+    const response = await api.delete(`/rooms/${roomId}/tracks/${trackId}`);
+    return response.data;
   },
   
   // Add track to room playlist
   addTrackToPlaylist: async (roomId, trackId) => {
-    return fetchAPI(`/rooms/${roomId}/playlist`, {
-      method: 'POST',
-      body: JSON.stringify({ trackId })
-    });
+    const response = await api.post(`/rooms/${roomId}/playlist`, { trackId });
+    return response.data;
   },
   
   // Remove track from room playlist
   removeTrackFromPlaylist: async (roomId, trackIndex) => {
-    return fetchAPI(`/rooms/${roomId}/playlist/${trackIndex}`, {
-      method: 'DELETE'
-    });
+    const response = await api.delete(`/rooms/${roomId}/playlist/${trackIndex}`);
+    return response.data;
   },
   
   // Update room state
   updateRoomState: async (roomId, stateData) => {
-    return fetchAPI(`/rooms/${roomId}/state`, {
-      method: 'PUT',
-      body: JSON.stringify(stateData)
-    });
+    const response = await api.put(`/rooms/${roomId}/state`, stateData);
+    return response.data;
   }
 };
 
 // User API methods
 const userApi = {
   getCurrentUser: async () => {
-    return fetchAPI('/users/me');
+    const response = await api.get('/users/me');
+    return response.data;
   },
   
   updateProfile: async (userData) => {
-    return fetchAPI('/users/me', {
-      method: 'PUT',
-      body: JSON.stringify(userData)
-    });
+    const response = await api.put('/users/me', userData);
+    return response.data;
   }
 };
 
@@ -269,55 +174,25 @@ const userApi = {
 const authApi = {
   // Get user profile
   getUserProfile: async () => {
-    return fetchAPI('/auth/profile');
+    const response = await api.get('/auth/profile');
+    return response.data;
   },
   
   // Logout (backend cleanup)
   logout: async () => {
-    return fetchAPI('/auth/logout', {
-      method: 'POST'
-    });
+    const response = await api.post('/auth/logout');
+    return response.data;
   }
 };
 
-// Utility function to format time in MM:SS format
+// Utility to format seconds to mm:ss format
 function formatTime(seconds) {
-  if (isNaN(seconds) || seconds < 0) {
-    return '0:00';
-  }
+  if (isNaN(seconds) || seconds < 0) return '0:00';
   
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = Math.floor(seconds % 60);
   
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-}
-
-// Toast notification function
-function showToast(message, type = 'info', duration = 3000) {
-  const toastContainer = document.getElementById('toast-container');
-  
-  // Create toast element
-  const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
-  toast.textContent = message;
-  
-  // Add to container
-  toastContainer.appendChild(toast);
-  
-  // Show the toast
-  setTimeout(() => {
-    toast.classList.add('show');
-  }, 10);
-  
-  // Hide and remove after duration
-  setTimeout(() => {
-    toast.classList.remove('show');
-    
-    // Remove from DOM after animation completes
-    setTimeout(() => {
-      toastContainer.removeChild(toast);
-    }, 500);
-  }, duration);
 }
 
 // Export the API utilities
@@ -339,7 +214,7 @@ async function apiRequest(endpoint, method = 'GET', body = null, requiresAuth = 
         headers['Authorization'] = `Bearer ${token}`;
       } catch (authError) {
         console.error('Authentication error:', authError);
-        showToast('Authentication error. Please log in again.', 'error');
+        showToast('Authentication error. Please log in again.', TOAST_TYPES.ERROR);
         // Optional: Redirect to login page after a short delay
         setTimeout(() => {
           if (typeof login === 'function') {
@@ -373,7 +248,7 @@ async function apiRequest(endpoint, method = 'GET', body = null, requiresAuth = 
       if (!response.ok) {
         // Special handling for authentication errors
         if (response.status === 401 || response.status === 403) {
-          showToast('Your session has expired. Please login again.', 'warning');
+          showToast('Your session has expired. Please login again.', TOAST_TYPES.WARNING);
           setTimeout(() => {
             if (typeof login === 'function') {
               login();
@@ -430,10 +305,10 @@ async function apiRequest(endpoint, method = 'GET', body = null, requiresAuth = 
       
       // If no retries left or not retryable, handle the error
       if (fetchError.name === 'AbortError') {
-        showToast('Request timed out. Please try again.', 'error');
+        showToast('Request timed out. Please try again.', TOAST_TYPES.ERROR);
         throw new Error('Request timed out');
       } else if (fetchError.message === 'Failed to fetch' || !navigator.onLine) {
-        showToast('Network error. Please check your connection.', 'error');
+        showNetworkToast(false);
         throw new Error('Network connection lost');
       } else {
         throw fetchError; // Rethrow other errors
@@ -445,7 +320,7 @@ async function apiRequest(endpoint, method = 'GET', body = null, requiresAuth = 
     
     // Don't display toast again for errors already handled
     if (!['Authentication failed', 'Request timed out', 'Network connection lost'].includes(error.message)) {
-      showToast(error.message || 'An unexpected error occurred', 'error');
+      showToast(error.message || 'An unexpected error occurred', TOAST_TYPES.ERROR);
     }
     
     throw error; // Rethrow for component-level handling if needed

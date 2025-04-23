@@ -11,17 +11,19 @@ const auth0Config = {
 // Make auth client accessible globally
 window.auth = null;
 
-// DOM elements
-const loginButton = document.getElementById('login-button');
-const logoutButton = document.getElementById('logout-button');
-const loginMessage = document.getElementById('login-message');
-const appContent = document.getElementById('app-content');
+// DOM elements - Use querySelector as a backup if getElementById fails
+const loginButton = document.getElementById('login-button') || document.querySelector('button[id="login-button"]');
+const logoutButton = document.getElementById('logout-button') || document.querySelector('button[id="logout-button"]');
+const loginMessage = document.getElementById('login-message') || document.querySelector('div[id="login-message"]');
+const appContent = document.getElementById('app-content') || document.querySelector('div[id="app-content"]');
 
 // Check if debug logging is available
 function logDebug(message, category = 'auth') {
   console.log(`[AUTH] ${message}`);
   if (typeof debugLog === 'function') {
     debugLog(message, category);
+  } else if (typeof window.debugLog === 'function') {
+    window.debugLog(message, category);
   }
 }
 
@@ -30,25 +32,36 @@ async function initAuth() {
   logDebug('Initializing Auth0...', 'auth');
   
   try {
+    // First, check if elements were found
+    if (!loginButton) {
+      console.error('Login button not found in DOM!');
+      logDebug('Login button not found in DOM!', 'auth');
+    }
+    
+    // Set default styling for login button - ensure it's visible
+    if (loginButton) {
+      loginButton.style.display = 'inline-block';
+      loginButton.style.backgroundColor = '#3B82F6'; // blue-500
+      loginButton.style.color = 'white';
+      loginButton.style.padding = '0.5rem 1rem';
+      loginButton.style.borderRadius = '0.375rem';
+      loginButton.style.cursor = 'pointer';
+    }
+    
     // Check if Auth0 SDK is available in window
     if (typeof createAuth0Client !== 'function') {
-      logDebug('Auth0 SDK not found in global scope', 'auth');
-      throw new Error('Auth0 SDK not available. Please check your internet connection.');
+      logDebug('Auth0 SDK not found in global scope, using fallback', 'auth');
+      
+      // Use the fallback or direct login approach
+      setupEventListeners();
+      updateAuthUI(false);
+      return;
     }
     
     logDebug('Creating Auth0 client with domain: ' + auth0Config.domain, 'auth');
     
     // Create Auth0 client
-    window.auth = await createAuth0Client({
-      domain: auth0Config.domain,
-      clientId: auth0Config.clientId,
-      authorizationParams: {
-        redirect_uri: auth0Config.redirectUri,
-        audience: auth0Config.audience
-      },
-      cacheLocation: auth0Config.cacheLocation
-    });
-    
+    window.auth = await createAuth0Client(auth0Config);
     logDebug('Auth0 client created successfully', 'auth');
 
     // Check for authentication state on page load
@@ -102,12 +115,12 @@ async function initAuth() {
     } catch (authError) {
       logDebug(`Authentication state error: ${authError.message}`, 'auth');
       updateAuthUI(false);
-      showToast('Authentication error: ' + authError.message, 'error');
+      showToast('Authentication error: ' + authError.message, TOAST_TYPES.ERROR);
     }
   } catch (error) {
     logDebug(`Auth0 initialization error: ${error.message}`, 'auth');
     updateAuthUI(false);
-    showToast('Authentication service error: ' + error.message, 'error');
+    showToast('Authentication service error: ' + error.message, TOAST_TYPES.ERROR);
   }
 }
 
@@ -139,7 +152,7 @@ async function registerUser(userProfile, accessToken) {
   
   const userData = await response.json();
   logDebug('User registered successfully', 'auth');
-  showToast('Welcome back, ' + (userProfile.nickname || userProfile.name) + '!', 'success');
+  showToast('Welcome back, ' + (userProfile.nickname || userProfile.name) + '!', TOAST_TYPES.SUCCESS);
   return userData;
 }
 
@@ -165,8 +178,8 @@ async function login() {
     logDebug('Initiating login...', 'auth');
     if (!window.auth) {
       logDebug('Auth0 client not initialized', 'auth');
-      showToast('Authentication service not ready. Please try again.', 'error');
-      return;
+      showToast('Authentication service not ready. Please try again.', TOAST_TYPES.ERROR);
+      return false;
     }
     
     logDebug('Redirecting to Auth0 login page', 'auth');
@@ -178,7 +191,8 @@ async function login() {
     // Note: Code after this won't execute immediately since there's a redirect
   } catch (error) {
     logDebug(`Login error: ${error.message}`, 'auth');
-    showToast('Login error: ' + error.message, 'error');
+    showToast('Login error: ' + error.message, TOAST_TYPES.ERROR);
+    return false;
   }
 }
 
@@ -188,8 +202,8 @@ async function logout() {
     logDebug('Logging out...', 'auth');
     if (!window.auth) {
       logDebug('Auth0 client not initialized', 'auth');
-      showToast('Authentication service not ready. Please try again.', 'error');
-      return;
+      showToast('Authentication service not ready. Please try again.', TOAST_TYPES.ERROR);
+      return false;
     }
     
     // Call backend logout endpoint if available
@@ -211,39 +225,30 @@ async function logout() {
     // Note: Auth0 will redirect after logout
   } catch (error) {
     logDebug(`Logout error: ${error.message}`, 'auth');
-    showToast('Logout error: ' + error.message, 'error');
+    showToast('Logout error: ' + error.message, TOAST_TYPES.ERROR);
+    return false;
   }
 }
 
 // Custom toast function if the main one is not available
-function showToast(message, type = 'info', duration = 3000) {
-  // Check if the main showToast function is defined in api.js
-  if (window.showToast) {
+function showToast(message, type = TOAST_TYPES.INFO, duration = 3000) {
+  // Use the global showToast function from toast.js
+  if (window.showToast && window.showToast !== showToast) {
     window.showToast(message, type, duration);
     return;
   }
   
-  // Fallback implementation
+  // Log message even if we can't show a toast
   logDebug(`Toast: ${type} - ${message}`, 'ui');
   
-  // Create a basic toast if container exists
-  const toastContainer = document.getElementById('toast-container');
-  if (toastContainer) {
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-    toast.style.padding = '10px 16px';
-    toast.style.marginBottom = '8px';
-    toast.style.borderRadius = '4px';
-    toast.style.backgroundColor = type === 'error' ? '#f44336' : 
-                                 type === 'success' ? '#4caf50' : 
-                                 type === 'warning' ? '#ff9800' : '#2196f3';
-    toast.style.color = 'white';
-    toastContainer.appendChild(toast);
-    setTimeout(() => {
-      toastContainer.removeChild(toast);
-    }, duration);
-  }
+  // Fallback implementation for development/testing
+  console.log(`%c TOAST [${type}]: ${message}`, 
+    `background: ${
+      type === TOAST_TYPES.ERROR ? '#f44336' : 
+      type === TOAST_TYPES.SUCCESS ? '#4caf50' : 
+      type === TOAST_TYPES.WARNING ? '#ff9800' : '#2196f3'
+    }; color: white; padding: 2px 6px; border-radius: 4px;`
+  );
 }
 
 // Add event listeners (must be done after DOM is loaded)
@@ -271,14 +276,40 @@ function setupEventListeners() {
   }
 }
 
-// Button click handlers
+// Button click handlers - Updated for more reliability
 function handleLoginClick(e) {
-  e.preventDefault();
+  if (e) e.preventDefault();
   logDebug('Login button clicked', 'auth');
+  
   // Add a visual indicator that the button was clicked
-  loginButton.classList.add('bg-blue-800');
-  setTimeout(() => loginButton.classList.remove('bg-blue-800'), 300);
-  login();
+  if (loginButton) {
+    loginButton.classList.add('bg-blue-800');
+    setTimeout(() => loginButton.classList.remove('bg-blue-800'), 300);
+  }
+  
+  // Try to log in with Auth0 client first
+  if (window.auth) {
+    login();
+  } else if (typeof window.directLogin === 'function') {
+    // Fallback to direct login if Auth0 client is not available
+    logDebug('Using direct login function', 'auth');
+    window.directLogin();
+  } else {
+    // Last resort: direct redirect to Auth0 login page
+    logDebug('Using hardcoded redirect to Auth0', 'auth');
+    const domain = auth0Config.domain;
+    const clientId = auth0Config.clientId;
+    const redirectUri = auth0Config.redirectUri;
+    
+    const authorizeUrl = `https://${domain}/authorize` +
+      `?client_id=${encodeURIComponent(clientId)}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      `&response_type=code` +
+      `&scope=${encodeURIComponent('openid profile email')}` +
+      `&state=${encodeURIComponent(Math.random().toString(36).substring(2, 15))}`;
+    
+    window.location.href = authorizeUrl;
+  }
 }
 
 function handleLogoutClick(e) {
@@ -293,8 +324,16 @@ function handleLogoutClick(e) {
 // Initialize Auth0 when the page loads
 document.addEventListener('DOMContentLoaded', function() {
   logDebug('DOM Content Loaded - Initializing Auth...', 'auth');
+  
   setupEventListeners();
-  initAuth();
+  
+  // Delay Auth0 initialization slightly to ensure DOM is ready
+  setTimeout(initAuth, 100);
+  
+  // Add a failsafe for login button
+  if (loginButton) {
+    loginButton.onclick = handleLoginClick;
+  }
 });
 
 // Export functions to the global scope for debugging
@@ -302,5 +341,6 @@ window.authDebug = {
   login,
   logout,
   initAuth,
-  setupEventListeners
+  setupEventListeners,
+  handleLoginClick
 }; 

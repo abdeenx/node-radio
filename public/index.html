@@ -4,214 +4,371 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Node Radio - Collaborative Web Radio</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
-  <!-- Load our custom style last to override framework styles -->
-  <link rel="stylesheet" href="/css/style.css">
   
-  <!-- Auth0 SDK - Multiple sources for reliability -->
-  <script src="https://cdn.auth0.com/js/auth0-spa-js/2.1.3/auth0-spa-js.production.js"></script>
-  <script src="/js/debug.js"></script>
+  <!-- Base styles first -->
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #121212;
+      color: #ffffff;
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 1rem;
+    }
+    
+    .header {
+      background-color: #1e1e1e;
+      padding: 1rem 0;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .header-title {
+      font-size: 1.5rem;
+      font-weight: bold;
+      margin: 0;
+    }
+    
+    .btn {
+      display: inline-block;
+      background-color: #3861fb;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background-color 0.2s;
+    }
+    
+    .btn:hover {
+      background-color: #2d4ec8;
+    }
+    
+    .btn-danger {
+      background-color: #e53935;
+    }
+    
+    .btn-danger:hover {
+      background-color: #c62828;
+    }
+    
+    .login-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 1rem;
+      text-align: center;
+    }
+    
+    .login-screen h1 {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+    }
+    
+    .login-screen p {
+      font-size: 1.2rem;
+      margin-bottom: 2rem;
+      color: #bbbbbb;
+    }
+    
+    .app-content {
+      display: none; /* Hidden by default, shown after login */
+      padding: 2rem 0;
+    }
+    
+    .hidden {
+      display: none !important;
+    }
+    
+    /* Toast notifications */
+    #toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 9999;
+    }
+    
+    .toast {
+      background-color: #333;
+      color: white;
+      padding: 1rem;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      min-width: 250px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      opacity: 0;
+      transform: translateY(50px);
+      transition: opacity 0.3s, transform 0.3s;
+    }
+    
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    .toast.success {
+      background-color: #43a047;
+    }
+    
+    .toast.error {
+      background-color: #e53935;
+    }
+    
+    .toast.warning {
+      background-color: #fb8c00;
+    }
+    
+    /* Debug panel */
+    .debug-panel {
+      position: fixed;
+      left: 0;
+      bottom: 0;
+      width: 100%;
+      max-height: 200px;
+      background-color: rgba(0, 0, 0, 0.85);
+      color: #00ff00;
+      font-family: monospace;
+      font-size: 12px;
+      padding: 5px;
+      overflow-y: auto;
+      z-index: 9999;
+      display: none; /* Hidden by default */
+    }
+    
+    .debug-entry {
+      margin-bottom: 2px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 2px;
+    }
+    
+    /* Show debug panel in development */
+    .debug-mode .debug-panel {
+      display: block;
+    }
+  </style>
+  
+  <!-- Toast styles -->
+  <link rel="stylesheet" href="/css/toast.css">
+  
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer">
+  
+  <!-- Toast notifications script - must be loaded before other scripts -->
+  <script src="/js/toast.js"></script>
 </head>
-<body class="bg-gray-900 text-white">
+<body class="debug-mode">
   <!-- Header -->
-  <header class="bg-gray-800 shadow-lg">
-    <div class="container mx-auto px-4 py-4 flex justify-between items-center">
-      <h1 class="text-xl font-bold">Node Radio</h1>
+  <header class="header">
+    <div class="container header-content">
+      <h1 class="header-title">Node Radio</h1>
       <div id="auth-buttons">
-        <button id="login-button" class="bg-blue-600 px-4 py-2 rounded-md hover:bg-blue-700 transition">Log In</button>
-        <button id="logout-button" class="hidden bg-red-600 px-4 py-2 rounded-md hover:bg-red-700 transition">Log Out</button>
+        <button id="login-button" class="btn">Log In</button>
+        <button id="logout-button" class="btn btn-danger hidden">Log Out</button>
       </div>
     </div>
   </header>
 
-  <!-- Main Content -->
-  <main class="container mx-auto px-4 py-8">
-    <!-- Auth message for non-logged in users -->
-    <div id="login-message" class="text-center py-12">
-      <h2 class="text-2xl font-bold mb-4">Welcome to Node Radio!</h2>
-      <p class="mb-8">Please log in to join a room or create your own.</p>
-    </div>
+  <!-- Login Screen (visible when not logged in) -->
+  <div id="login-screen" class="container login-screen">
+    <h1>Welcome to Node Radio!</h1>
+    <p>Join rooms and listen to music with friends in real-time</p>
+    <button id="big-login-button" class="btn">Log In to Get Started</button>
+  </div>
 
-    <!-- Main app content (visible when logged in) -->
-    <div id="app-content" class="hidden">
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <!-- Left sidebar (Rooms & Upload) -->
-        <div class="lg:col-span-1">
-          <div class="bg-gray-800 rounded-lg p-4 mb-8">
-            <h2 class="text-xl font-bold mb-4">Rooms</h2>
-            <div id="rooms-list" class="space-y-2">
-              <!-- Rooms will be added here dynamically -->
-              <p class="text-gray-400 text-sm">Loading rooms...</p>
-            </div>
-            <button id="create-room-button" class="mt-4 bg-blue-600 px-4 py-2 rounded-md hover:bg-blue-700 transition w-full">
-              Create Room
-            </button>
-          </div>
-          
-          <div class="bg-gray-800 rounded-lg p-4">
-            <h2 class="text-xl font-bold mb-4">Upload Track</h2>
-            <form id="upload-form">
-              <div class="mb-4">
-                <label for="track-title" class="block text-sm font-medium mb-1">Title</label>
-                <input type="text" id="track-title" class="w-full bg-gray-700 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-              </div>
-              <div class="mb-4">
-                <label for="track-artist" class="block text-sm font-medium mb-1">Artist</label>
-                <input type="text" id="track-artist" class="w-full bg-gray-700 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-              </div>
-              <div class="mb-4">
-                <label for="track-file" class="block text-sm font-medium mb-1">Audio File</label>
-                <input type="file" id="track-file" accept="audio/*" class="w-full bg-gray-700 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-              </div>
-              <button type="submit" class="bg-green-600 px-4 py-2 rounded-md hover:bg-green-700 transition w-full">
-                Upload
-              </button>
-            </form>
-            <div id="upload-progress" class="hidden mt-4">
-              <div class="w-full bg-gray-700 rounded-full h-2.5">
-                <div id="upload-progress-bar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
-              </div>
-              <p id="upload-status" class="text-sm text-center mt-2">Uploading: 0%</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Center content (Player & Playlist) -->
-        <div class="lg:col-span-2">
-          <!-- Room info -->
-          <div id="room-info" class="hidden bg-gray-800 rounded-lg p-4 mb-8">
-            <h2 id="room-name" class="text-2xl font-bold mb-2">Room Name</h2>
-            <p id="room-description" class="text-gray-400">Room description goes here.</p>
-          </div>
-
-          <!-- Audio Player -->
-          <div id="player-container" class="hidden bg-gray-800 rounded-lg p-6 mb-8">
-            <div class="mb-4">
-              <h3 id="now-playing-title" class="text-xl font-bold">Not Playing</h3>
-              <p id="now-playing-artist" class="text-gray-400">Select a track to begin</p>
-            </div>
-            
-            <audio id="audio-player" class="hidden"></audio>
-            
-            <div class="flex items-center space-x-4 mb-4">
-              <button id="prev-button" class="text-2xl hover:text-blue-500 transition">
-                <i class="fas fa-step-backward"></i>
-              </button>
-              <button id="play-button" class="text-4xl hover:text-blue-500 transition">
-                <i class="fas fa-play"></i>
-              </button>
-              <button id="next-button" class="text-2xl hover:text-blue-500 transition">
-                <i class="fas fa-step-forward"></i>
-              </button>
-              <div class="flex items-center ml-4">
-                <i class="fas fa-volume-down mr-2"></i>
-                <input id="volume-slider" type="range" min="0" max="100" value="100" class="w-24">
-              </div>
-            </div>
-            
-            <div class="flex items-center space-x-4">
-              <span id="current-time" class="text-sm">0:00</span>
-              <div class="flex-grow bg-gray-700 rounded-full h-2 cursor-pointer" id="seek-container">
-                <div id="seek-bar" class="bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
-              </div>
-              <span id="duration" class="text-sm">0:00</span>
-            </div>
-          </div>
-
-          <!-- Playlist -->
-          <div id="playlist-container" class="hidden bg-gray-800 rounded-lg p-4">
-            <h2 class="text-xl font-bold mb-4">Playlist</h2>
-            <div id="playlist" class="space-y-2">
-              <!-- Tracks will be added here dynamically -->
-              <p class="text-gray-400 text-center">No tracks in playlist</p>
-            </div>
-          </div>
-
-          <!-- Track Library -->
-          <div id="library-container" class="bg-gray-800 rounded-lg p-4">
-            <h2 class="text-xl font-bold mb-4">Track Library</h2>
-            <div id="track-library" class="space-y-2">
-              <!-- Tracks will be added here dynamically -->
-              <p class="text-gray-400 text-center">Loading tracks...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </main>
-
-  <!-- Create Room Modal -->
-  <div id="create-room-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden">
-    <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
-      <h2 class="text-xl font-bold mb-4">Create Room</h2>
-      <form id="create-room-form">
-        <div class="mb-4">
-          <label for="room-name" class="block text-sm font-medium mb-1">Room Name</label>
-          <input type="text" id="room-name-input" class="w-full bg-gray-700 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-        </div>
-        <div class="mb-6">
-          <label for="room-description" class="block text-sm font-medium mb-1">Description</label>
-          <textarea id="room-description-input" class="w-full bg-gray-700 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" rows="3"></textarea>
-        </div>
-        <div class="flex justify-end space-x-4">
-          <button type="button" id="cancel-create-room" class="bg-gray-600 px-4 py-2 rounded-md hover:bg-gray-700 transition">
-            Cancel
-          </button>
-          <button type="submit" class="bg-blue-600 px-4 py-2 rounded-md hover:bg-blue-700 transition">
-            Create
-          </button>
-        </div>
-      </form>
-    </div>
+  <!-- App Content (visible when logged in) -->
+  <div id="app-content" class="container app-content hidden">
+    <div id="app-loading">Loading application...</div>
+    <!-- App will be dynamically populated after login -->
   </div>
 
   <!-- Toast Notifications -->
-  <div id="toast-container" class="fixed bottom-4 right-4 z-50"></div>
+  <div id="toast-container"></div>
   
-  <!-- Debug Info -->
-  <div id="debug-info" class="debug-info"></div>
+  <!-- Debug Panel -->
+  <div id="debug-panel" class="debug-panel"></div>
 
-  <!-- Socket.io -->
-  <script src="/socket.io/socket.io.js"></script>
-  
-  <!-- Debug script -->
+  <!-- Core auth script -->
   <script>
-    // Add debug info helper
+    // Debug logging
     function debugLog(message, category = 'general') {
-      console.log(`[DEBUG:${category}]`, message);
-      const debugElement = document.getElementById('debug-info');
-      if (debugElement) {
-        const timestamp = new Date().toLocaleTimeString();
-        const logEntry = document.createElement('div');
-        logEntry.innerHTML = `<strong>${timestamp} [${category}]:</strong> ${message}`;
-        debugElement.appendChild(logEntry);
+      const timestamp = new Date().toLocaleTimeString();
+      console.log(`[${timestamp}][${category}] ${message}`);
+      
+      const debugPanel = document.getElementById('debug-panel');
+      if (debugPanel) {
+        const entry = document.createElement('div');
+        entry.className = 'debug-entry';
+        entry.innerHTML = `<strong>${timestamp} [${category}]:</strong> ${message}`;
+        debugPanel.appendChild(entry);
+        
+        // Auto-scroll to bottom
+        debugPanel.scrollTop = debugPanel.scrollHeight;
         
         // Limit entries
-        while (debugElement.children.length > 20) {
-          debugElement.removeChild(debugElement.firstChild);
+        while (debugPanel.children.length > 50) {
+          debugPanel.removeChild(debugPanel.firstChild);
         }
-        
-        // Auto-scroll
-        debugElement.scrollTop = debugElement.scrollHeight;
       }
     }
     
-    // Log page load
-    debugLog('Page loaded', 'init');
+    // Auth0 Configuration
+    const auth0Config = {
+      domain: 'dev-4ehbbvfyj6j25ymb.us.auth0.com',
+      clientId: 'gD07PIb4P7W1NlJqwCXcj9qjZh8XVHRx',
+      redirectUri: window.location.origin
+    };
     
-    // Monitor Auth0 initialization
-    window.addEventListener('load', function() {
-      debugLog('Window loaded', 'init');
+    // Direct login function (fallback for Auth0 SDK)
+    function directLogin() {
+      debugLog('Using direct login', 'auth');
+      
+      const { domain, clientId, redirectUri } = auth0Config;
+      const state = Math.random().toString(36).substring(2);
+      
+      // Store state in localStorage to verify when returning
+      localStorage.setItem('auth_state', state);
+      
+      const authUrl = `https://${domain}/authorize` +
+        `?client_id=${encodeURIComponent(clientId)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&response_type=code` +
+        `&scope=${encodeURIComponent('openid profile email')}` +
+        `&state=${encodeURIComponent(state)}`;
+      
+      debugLog('Redirecting to Auth0', 'auth');
+      window.location.href = authUrl;
+    }
+    
+    // Add event listeners when DOM is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+      debugLog('DOM loaded, setting up auth UI', 'init');
+      
+      // Login buttons
+      const loginButton = document.getElementById('login-button');
+      const bigLoginButton = document.getElementById('big-login-button');
+      
+      if (loginButton) {
+        loginButton.addEventListener('click', function(e) {
+          e.preventDefault();
+          debugLog('Login button clicked', 'auth');
+          directLogin();
+        });
+      }
+      
+      if (bigLoginButton) {
+        bigLoginButton.addEventListener('click', function(e) {
+          e.preventDefault();
+          debugLog('Big login button clicked', 'auth');
+          directLogin();
+        });
+      }
+      
+      // Check URL for auth callback
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('code') && urlParams.has('state')) {
+        debugLog('Auth callback detected', 'auth');
+        
+        // Verify state to prevent CSRF
+        const returnedState = urlParams.get('state');
+        const storedState = localStorage.getItem('auth_state');
+        
+        if (returnedState === storedState) {
+          debugLog('Auth state valid, handling callback', 'auth');
+          
+          // Clear auth state
+          localStorage.removeItem('auth_state');
+          
+          // Remove code and state from URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+          
+          // Show authenticated UI
+          showAuthenticatedUI();
+          
+          // Show success message
+          showToast('Successfully logged in!', 'success');
+          
+          // Load the main app
+          loadApp();
+        } else {
+          debugLog('Auth state invalid, possible CSRF', 'auth');
+          showToast('Authentication failed: Invalid state', 'error');
+        }
+      }
     });
+    
+    // Show authenticated UI
+    function showAuthenticatedUI() {
+      debugLog('Showing authenticated UI', 'ui');
+      
+      // Hide login screen, show app content
+      const loginScreen = document.getElementById('login-screen');
+      const appContent = document.getElementById('app-content');
+      
+      if (loginScreen) loginScreen.classList.add('hidden');
+      if (appContent) appContent.classList.remove('hidden');
+      
+      // Toggle auth buttons
+      const loginButton = document.getElementById('login-button');
+      const logoutButton = document.getElementById('logout-button');
+      
+      if (loginButton) loginButton.classList.add('hidden');
+      if (logoutButton) logoutButton.classList.remove('hidden');
+      
+      // Add logout handler
+      if (logoutButton) {
+        logoutButton.addEventListener('click', function(e) {
+          e.preventDefault();
+          debugLog('Logout button clicked', 'auth');
+          
+          const { domain, clientId, redirectUri } = auth0Config;
+          
+          // Redirect to logout URL
+          window.location.href = `https://${domain}/v2/logout` +
+            `?client_id=${encodeURIComponent(clientId)}` +
+            `&returnTo=${encodeURIComponent(redirectUri)}`;
+        });
+      }
+    }
+    
+    // Load the main app
+    function loadApp() {
+      debugLog('Loading main app', 'app');
+      
+      // Load the application JS after authentication
+      const appScript = document.createElement('script');
+      appScript.src = '/js/app.bundle.js';
+      appScript.onload = function() {
+        debugLog('App script loaded', 'app');
+        
+        // Initialize app if function exists
+        if (typeof initApp === 'function') {
+          debugLog('Initializing app', 'app');
+          initApp();
+        } else {
+          debugLog('App initialization function not found', 'app');
+          showToast('Error loading application', 'error');
+        }
+      };
+      appScript.onerror = function() {
+        debugLog('Failed to load app script', 'app');
+        showToast('Error loading application resources', 'error');
+      };
+      document.body.appendChild(appScript);
+    }
   </script>
-  
-  <!-- App Scripts -->
-  <script src="/js/auth.js"></script>
-  <script src="/js/api.js"></script>
-  <script src="/js/player.js"></script>
-  <script src="/js/rooms.js"></script>
-  <script src="/js/upload.js"></script>
-  <script src="/js/app.js"></script>
 </body>
 </html> 
